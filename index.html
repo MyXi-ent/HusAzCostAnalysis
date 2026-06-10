@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Cost Analysis</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f4f4; color: #333; padding: 40px; }
+        h1 { color: #0078d4; margin-bottom: 20px; }
+        .card { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .card h2 { color: #0078d4; margin-bottom: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #eee; }
+        th { background: #f9f9f9; font-weight: 600; }
+        .cost { font-weight: 600; color: #107c10; }
+        .free { color: #0078d4; font-weight: 600; }
+        footer { margin-top: 40px; color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>Azure Cost Analysis — Service Breakdown</h1>
+
+    <div class="card">
+        <h2>Static Web Apps (SWA)</h2>
+        <table>
+            <tr><th>SKU</th><th>Monthly Cost</th><th>Features</th></tr>
+            <tr><td>Free</td><td class="free">$0</td><td>100 GB bandwidth, 2 custom domains, SSL, GitHub Actions CI/CD</td></tr>
+            <tr><td>Standard</td><td class="cost">$9/mo</td><td>Unlimited bandwidth, 5 custom domains, SWA CLI, backend linking</td></tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Function Apps</h2>
+        <table>
+            <tr><th>Plan</th><th>Monthly Cost</th><th>Notes</th></tr>
+            <tr><td>Consumption (Y1)</td><td class="free">~$0 (1M free executions)</td><td>Cold starts, pay-per-use</td></tr>
+            <tr><td>Elastic Premium (EP1)</td><td class="cost">~$150-220/mo</td><td>Always warm, VNET, no cold starts</td></tr>
+            <tr><td>App Service (B1)</td><td class="cost">~$13/mo</td><td>Basic tier, always on</td></tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Storage Accounts</h2>
+        <table>
+            <tr><th>Tier</th><th>Monthly Cost</th><th>Notes</th></tr>
+            <tr><td>LRS (Hot)</td><td class="cost">$0.018/GB</td><td>Locally redundant, general purpose v2</td></tr>
+            <tr><td>Table Storage</td><td class="cost">$0.045/GB + $0.00036/10K txn</td><td>NoSQL key-value</td></tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Azure OpenAI</h2>
+        <table>
+            <tr><th>Model</th><th>Cost</th><th>Notes</th></tr>
+            <tr><td>GPT-4o</td><td class="cost">$2.50/1M input, $10/1M output</td><td>Most capable</td></tr>
+            <tr><td>GPT-4o-mini</td><td class="cost">$0.15/1M input, $0.60/1M output</td><td>Cost-effective</td></tr>
+        </table>
+    </div>
+
+    <footer>
+        <p>Deployed on Azure Static Web Apps (Free tier) | Last updated: June 2026</p>
+    </footer>
+</body>
+</html>
