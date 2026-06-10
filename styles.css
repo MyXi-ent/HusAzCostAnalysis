@@ -81,6 +81,20 @@ h1 {
 .preset-btn:hover { background: #2a3a5c; }
 .preset-btn.active { background: #0078d4; border-color: #0078d4; color: #fff; }
 
+.granularity-separator { color: #3a4a6c; margin: 0 8px; font-size: 1.2rem; align-self: center; }
+.granularity-btn {
+    padding: 6px 12px;
+    border: 1px solid #3a4a6c;
+    background: transparent;
+    color: #a5d6a7;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+.granularity-btn:hover { background: #2a3a5c; }
+.granularity-btn.active { background: #388e3c; border-color: #388e3c; color: #fff; }
+
 .date-custom {
     display: flex;
     align-items: center;

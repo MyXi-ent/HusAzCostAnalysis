@@ -36,6 +36,7 @@ const ICON_MAP = {
 
 let dailyChart = null;
 let currentData = null;
+let currentGranularity = 'day';
 
 function getIconPath(serviceName) {
     const slug = ICON_MAP[serviceName];
@@ -69,17 +70,42 @@ async function fetchCostData(startDate, endDate) {
     return resp.json();
 }
 
+function aggregateByGranularity(dailyTotals, granularity) {
+    if (granularity === 'day') return dailyTotals;
+    const map = {};
+    for (const d of dailyTotals) {
+        let key;
+        if (granularity === 'month') {
+            key = d.date.substring(0, 7) + '-01';
+        } else {
+            // week: group by ISO week (Monday start)
+            const dt = new Date(d.date + 'T00:00:00');
+            const day = dt.getDay() || 7;
+            dt.setDate(dt.getDate() - day + 1);
+            key = dt.toISOString().split('T')[0];
+        }
+        map[key] = (map[key] || 0) + d.cost;
+    }
+    return Object.entries(map)
+        .map(([date, cost]) => ({ date, cost: Math.round(cost * 100) / 100 }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function renderChart(dailyTotals) {
+    const aggregated = aggregateByGranularity(dailyTotals, currentGranularity);
     const ctx = document.getElementById('dailyChart').getContext('2d');
     if (dailyChart) dailyChart.destroy();
+
+    const timeUnit = currentGranularity === 'month' ? 'month' : currentGranularity === 'week' ? 'week' : (aggregated.length > 90 ? 'month' : 'week');
+    const label = currentGranularity === 'month' ? 'Monthly Cost ($)' : currentGranularity === 'week' ? 'Weekly Cost ($)' : 'Daily Cost ($)';
 
     dailyChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: dailyTotals.map(d => d.date),
+            labels: aggregated.map(d => d.date),
             datasets: [{
-                label: 'Daily Cost ($)',
-                data: dailyTotals.map(d => d.cost),
+                label,
+                data: aggregated.map(d => d.cost),
                 backgroundColor: 'rgba(79, 195, 247, 0.4)',
                 borderColor: '#4fc3f7',
                 borderWidth: 1,
@@ -100,7 +126,7 @@ function renderChart(dailyTotals) {
             scales: {
                 x: {
                     type: 'time',
-                    time: { unit: dailyTotals.length > 90 ? 'month' : 'week' },
+                    time: { unit: timeUnit },
                     grid: { color: '#2a3a5c' },
                     ticks: { color: '#888' }
                 },
@@ -220,6 +246,15 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
             const { startDate, endDate } = getDateRange(parseInt(btn.dataset.days));
             loadData(startDate, endDate);
         }
+    });
+});
+
+document.querySelectorAll('.granularity-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.granularity-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentGranularity = btn.dataset.granularity;
+        if (currentData) renderChart(currentData.dailyTotals);
     });
 });
 
