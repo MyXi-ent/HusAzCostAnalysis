@@ -190,6 +190,26 @@ function renderChart(dailyTotals) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (event, elements) => {
+                if (!elements.length) return;
+                const idx = elements[0].index;
+                const clickedDate = aggregated[idx].date;
+                let start, end;
+                if (currentGranularity === 'month') {
+                    const dt = new Date(clickedDate + 'T00:00:00');
+                    start = clickedDate;
+                    end = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).toISOString().split('T')[0];
+                } else if (currentGranularity === 'week') {
+                    start = clickedDate;
+                    const dt = new Date(clickedDate + 'T00:00:00');
+                    dt.setDate(dt.getDate() + 6);
+                    end = dt.toISOString().split('T')[0];
+                } else {
+                    start = clickedDate;
+                    end = clickedDate;
+                }
+                loadData(start, end);
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
