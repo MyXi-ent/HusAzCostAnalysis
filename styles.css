@@ -269,6 +269,17 @@ h1 {
     font-weight: 500;
     white-space: nowrap;
 }
+.resource-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: #1a3a2a;
+    border: 1px solid #388e3c;
+    color: #a5d6a7;
+    font-size: 0.65rem;
+    vertical-align: middle;
+}
 .show-more-link {
     color: #4fc3f7;
     font-size: 0.75rem;

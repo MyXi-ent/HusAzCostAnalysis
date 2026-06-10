@@ -76,6 +76,27 @@ let currentData = null;
 let currentGranularity = 'day';
 let currentView = 'cards';
 let currentSort = { key: 'cost', dir: 'desc' };
+let resourceData = null;
+
+async function loadResourceMap() {
+    try {
+        const res = await fetch('/api/getResources');
+        if (res.ok) resourceData = await res.json();
+    } catch (e) { /* optional - don't break if unavailable */ }
+}
+
+function getResourceName(serviceName, serviceResource) {
+    if (!resourceData || !resourceData.skuMap) return null;
+    // Try direct SKU match (VM sizes like D16ads v5 → Standard_D16ads_v5)
+    const normalized = serviceResource.replace(/\s+/g, '').toLowerCase();
+    for (const [sku, resources] of Object.entries(resourceData.skuMap)) {
+        const normSku = sku.replace(/\s+/g, '').toLowerCase();
+        if (normSku === normalized || normalized.includes(normSku) || normSku.includes(normalized)) {
+            return resources;
+        }
+    }
+    return null;
+}
 
 function getIconPath(serviceName) {
     const slug = ICON_MAP[serviceName];
@@ -244,23 +265,29 @@ function renderServices(serviceBreakdown) {
         const resources = svc.resources || [];
         const top10 = resources.slice(0, 10);
         const hasMore = resources.length > 10;
-        const resourcesHtml = top10.map(r => `
+        const resourcesHtml = top10.map(r => {
+            const mapped = getResourceName(svc.service, r.name);
+            const badge = mapped ? `<span class="resource-badge" title="${mapped.map(m => m.name).join(', ')}">${mapped[0].name}</span>` : '';
+            return `
             <div class="resource-row">
-                <span class="resource-name" title="${r.name}">${r.name}</span>
+                <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
                 <span class="resource-cost">${formatCost(r.cost)}</span>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
         const moreHtml = hasMore ? `
             <div class="resource-row resource-more" data-svc-idx="${idx}">
                 <a href="#" class="show-more-link">Show ${resources.length - 10} more...</a>
             </div>
             <div class="resource-overflow" id="overflow-${idx}" style="display:none">
-                ${resources.slice(10).map(r => `
+                ${resources.slice(10).map(r => {
+                    const mapped = getResourceName(svc.service, r.name);
+                    const badge = mapped ? `<span class="resource-badge" title="${mapped.map(m => m.name).join(', ')}">${mapped[0].name}</span>` : '';
+                    return `
                     <div class="resource-row">
-                        <span class="resource-name" title="${r.name}">${r.name}</span>
+                        <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
                         <span class="resource-cost">${formatCost(r.cost)}</span>
-                    </div>
-                `).join('')}
+                    </div>`;
+                }).join('')}
             </div>
         ` : '';
 
@@ -489,6 +516,7 @@ if (_sponsorDaysEl) {
     _sponsorDaysEl.textContent = _days > 0 ? _days.toLocaleString() : 'Expired';
 }
 
-// Initial load — 90 days
+// Initial load — 90 days + resource map
+loadResourceMap();
 const { startDate, endDate } = getDateRange(90);
 loadData(startDate, endDate);
