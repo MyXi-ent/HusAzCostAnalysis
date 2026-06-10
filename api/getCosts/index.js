@@ -1,12 +1,82 @@
-const { CosmosClient } = require('@azure/cosmos');
+const https = require('https');
+const crypto = require('crypto');
 
-const endpoint = process.env.COSMOS_ENDPOINT || 'https://husazcomoserverless.documents.azure.com:443/';
+const host = 'husazcomoserverless.documents.azure.com';
 const key = process.env.COSMOS_KEY;
 const dbId = 'HusAzConsumption';
 const collId = 'HusAzConsumptionCosmoDB';
 
-const client = new CosmosClient({ endpoint, key });
-const container = client.database(dbId).container(collId);
+function generateAuth(verb, resourceType, resourceLink, date) {
+  const text = `${verb}\n${resourceType}\n${resourceLink}\n${date.toLowerCase()}\n\n`;
+  const sig = crypto.createHmac('sha256', Buffer.from(key, 'base64')).update(text).digest('base64');
+  return encodeURIComponent(`type=master&ver=1.0&sig=${sig}`);
+}
+
+function httpRequest(opts, body) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(opts, res => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function getPartitionKeyRanges() {
+  const date = new Date().toUTCString();
+  const resourceLink = `dbs/${dbId}/colls/${collId}`;
+  const token = generateAuth('get', 'pkranges', resourceLink, date);
+  const res = await httpRequest({
+    hostname: host, port: 443, method: 'GET',
+    path: `/${resourceLink}/pkranges`,
+    headers: {
+      'Authorization': token,
+      'x-ms-date': date,
+      'x-ms-version': '2020-07-15'
+    }
+  });
+  return res.body.PartitionKeyRanges || [];
+}
+
+async function cosmosQuery(sql, parameters) {
+  const ranges = await getPartitionKeyRanges();
+  let allDocs = [];
+  for (const range of ranges) {
+    let continuation = null;
+    do {
+      const date = new Date().toUTCString();
+      const resourceLink = `dbs/${dbId}/colls/${collId}`;
+      const token = generateAuth('post', 'docs', resourceLink, date);
+      const body = JSON.stringify(parameters ? { query: sql, parameters } : { query: sql });
+      const headers = {
+        'Authorization': token,
+        'x-ms-date': date,
+        'x-ms-version': '2020-07-15',
+        'Content-Type': 'application/query+json',
+        'x-ms-documentdb-isquery': 'True',
+        'x-ms-documentdb-partitionkeyrangeid': range.id,
+        'x-ms-max-item-count': '1000',
+        'Content-Length': Buffer.byteLength(body)
+      };
+      if (continuation) headers['x-ms-continuation'] = continuation;
+      const res = await httpRequest({
+        hostname: host, port: 443, method: 'POST',
+        path: `/${resourceLink}/docs`,
+        headers
+      }, body);
+      if (res.body.code) throw new Error(res.body.message);
+      allDocs = allDocs.concat(res.body.Documents || []);
+      continuation = res.body._continuation || null;
+    } while (continuation);
+  }
+  return allDocs;
+}
 
 module.exports = async function (context, req) {
   const startDate = req.query.startDate || req.body?.startDate;
@@ -18,17 +88,11 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const query = {
-      query: "SELECT c.Date, c.ServiceName, c.Cost FROM c WHERE c.Date >= @start AND c.Date <= @end",
-      parameters: [
-        { name: "@start", value: `${startDate}T00:00:00` },
-        { name: "@end", value: `${endDate}T00:00:00` }
-      ]
-    };
+    const docs = await cosmosQuery(
+      "SELECT c.Date, c.ServiceName, c.Cost FROM c WHERE c.Date >= @start AND c.Date <= @end",
+      [{ name: "@start", value: `${startDate}T00:00:00` }, { name: "@end", value: `${endDate}T00:00:00` }]
+    );
 
-    const { resources: docs } = await container.items.query(query).fetchAll();
-
-    // Aggregate daily totals
     const dailyMap = {};
     const serviceMap = {};
     for (const d of docs) {
@@ -55,7 +119,6 @@ module.exports = async function (context, req) {
       body: { dateRange: { startDate, endDate }, dailyTotals, serviceBreakdown, totalCost }
     };
   } catch (err) {
-    context.log.error('getCosts error:', err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
 };
