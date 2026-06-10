@@ -34,6 +34,43 @@ const ICON_MAP = {
     'Web PubSub': 'service-bus'
 };
 
+const PORTAL_LINK_MAP = {
+    'API Management': '#browse/Microsoft.ApiManagement%2Fservice',
+    'Automation': '#browse/Microsoft.Automation%2FAutomationAccounts',
+    'Azure App Service': '#browse/Microsoft.Web%2Fsites',
+    'Azure Cognitive Search': '#browse/Microsoft.Search%2FsearchServices',
+    'Azure Container Apps': '#browse/Microsoft.App%2FcontainerApps',
+    'Azure Cosmos DB': '#browse/Microsoft.DocumentDb%2FdatabaseAccounts',
+    'Azure Data Explorer': '#browse/Microsoft.Kusto%2Fclusters',
+    'Azure Database for MySQL': '#browse/Microsoft.DBforMySQL%2FflexibleServers',
+    'Azure DNS': '#browse/Microsoft.Network%2FdnsZones',
+    'Azure Front Door Service': '#browse/Microsoft.Cdn%2Fprofiles',
+    'Azure Grafana Service': '#browse/Microsoft.Dashboard%2Fgrafana',
+    'Azure Machine Learning': '#browse/Microsoft.MachineLearningServices%2Fworkspaces',
+    'Azure Monitor': '#browse/Microsoft.Insights%2Fcomponents',
+    'Event Grid': '#browse/Microsoft.EventGrid%2Ftopics',
+    'Event Hubs': '#browse/Microsoft.EventHub%2Fnamespaces',
+    'Foundry Models': '#browse/Microsoft.CognitiveServices%2Faccounts',
+    'Foundry Tools': '#browse/Microsoft.CognitiveServices%2Faccounts',
+    'Functions': '#browse/Microsoft.Web%2Fsites/kind/functionapp',
+    'Key Vault': '#browse/Microsoft.KeyVault%2Fvaults',
+    'Load Balancer': '#browse/Microsoft.Network%2FloadBalancers',
+    'Log Analytics': '#browse/Microsoft.OperationalInsights%2Fworkspaces',
+    'Logic Apps': '#browse/Microsoft.Logic%2Fworkflows',
+    'Messaging': '#browse/Microsoft.Communication%2FCommunicationServices',
+    'Phone Numbers': '#browse/Microsoft.Communication%2FCommunicationServices',
+    'Service Bus': '#browse/Microsoft.ServiceBus%2Fnamespaces',
+    'Storage': '#browse/Microsoft.Storage%2FStorageAccounts',
+    'Virtual Machines': '#browse/Microsoft.Compute%2FVirtualMachines',
+    'Virtual Network': '#browse/Microsoft.Network%2FvirtualNetworks',
+    'Web PubSub': '#browse/Microsoft.SignalRService%2FWebPubSub'
+};
+
+function getPortalUrl(serviceName) {
+    const path = PORTAL_LINK_MAP[serviceName];
+    return path ? `https://portal.azure.com/${path}` : null;
+}
+
 let dailyChart = null;
 let currentData = null;
 let currentGranularity = 'day';
@@ -174,14 +211,19 @@ function renderTable(serviceBreakdown) {
         return a[key].localeCompare(b[key]) * dir;
     });
 
-    tbody.innerHTML = rows.map(r => `
+    tbody.innerHTML = rows.map(r => {
+        const portalUrl = getPortalUrl(r.service);
+        const svcHtml = portalUrl
+            ? `<a class="service-link" href="${portalUrl}" target="_blank">${r.service}</a>`
+            : r.service;
+        return `
         <tr>
-            <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${r.service}</td>
+            <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${svcHtml}</td>
             <td>${r.resource}</td>
             <td>${formatCost(r.cost)}</td>
             <td>${r.records}</td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 
     // Update sort indicators
     document.querySelectorAll('.service-table th').forEach(th => {
@@ -222,13 +264,18 @@ function renderServices(serviceBreakdown) {
             </div>
         ` : '';
 
+        const portalUrl = getPortalUrl(svc.service);
+        const nameHtml = portalUrl
+            ? `<a class="service-name service-link" href="${portalUrl}" target="_blank" title="Open in Azure Portal">${svc.service}</a>`
+            : `<div class="service-name" title="${svc.service}">${svc.service}</div>`;
+
         return `
         <div class="service-card">
             <div class="service-icon">
                 <img src="${getIconPath(svc.service)}" alt="${svc.service}" onerror="this.src='icons/azure-monitor.svg'">
             </div>
             <div class="service-info">
-                <div class="service-name" title="${svc.service}">${svc.service}</div>
+                ${nameHtml}
                 <div class="service-cost">${formatCost(svc.cost)}</div>
                 <div class="service-meta">${svc.records} line items</div>
                 <div class="service-bar">
@@ -428,6 +475,15 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
         }
     } catch (e) { /* not logged in */ }
 })();
+
+// Calculate sponsorship remaining days
+const _sponsorDaysEl = document.getElementById('sponsorDays');
+if (_sponsorDaysEl) {
+    const _expiry = new Date('2027-08-18T00:00:00');
+    const _today = new Date();
+    const _days = Math.ceil((_expiry - _today) / 86400000);
+    _sponsorDaysEl.textContent = _days > 0 ? _days.toLocaleString() : 'Expired';
+}
 
 // Initial load — 90 days
 const { startDate, endDate } = getDateRange(90);

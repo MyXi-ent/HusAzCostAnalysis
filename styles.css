@@ -205,6 +205,13 @@ h1 {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.service-link {
+    color: #4fc3f7;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.service-link:hover { color: #81d4fa; text-decoration: underline; }
 
 .service-cost {
     font-size: 1.2rem;
