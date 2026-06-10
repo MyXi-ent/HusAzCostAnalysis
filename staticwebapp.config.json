@@ -9,6 +9,10 @@
       "statusCode": 404
     },
     {
+      "route": "/icons/*",
+      "allowedRoles": ["authenticated"]
+    },
+    {
       "route": "/*",
       "allowedRoles": ["viewer"]
     }
