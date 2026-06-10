@@ -80,7 +80,7 @@ module.exports = async function (context, req) {
 
     // Query App Service Plans with SKUs
     const plans = await queryResourceGraph(token,
-      "Resources | where type == 'microsoft.web/serverfarms' | project name, resourceGroup, location, sku=sku.name, tier=sku.tier, id"
+      "Resources | where type == 'microsoft.web/serverfarms' | project name, resourceGroup, location, sku=sku.name, tier=sku.tier, workers=properties.numberOfWorkers, id"
     );
 
     // Query Function Apps
@@ -124,13 +124,23 @@ module.exports = async function (context, req) {
     });
 
     plans.forEach(p => {
-      const entry = { name: p.name, type: 'App Service Plan', resourceGroup: p.resourceGroup, id: p.id };
+      const entry = { name: `${p.name} (${p.sku})`, type: 'App Service Plan', resourceGroup: p.resourceGroup, id: p.id };
       addToMap(`${p.sku || ''} ${p.tier || ''}`.trim(), entry);
-      // Also map by plan tier: "P2 v3 App" → "P2v3"
       if (p.sku) {
         addToMap(p.sku, entry);
         addToMap(`${p.sku} App`, entry);
       }
+      // Premium/Elastic plans bill as VM compute under these SKUs:
+      const planVmMap = {
+        'P1v3': 'D2a v4/D2as v4',
+        'P2v3': 'E2a v4/E2as v4',
+        'P3v3': 'E4a v4/E4as v4',
+        'EP1': 'D2a v4/D2as v4',
+        'EP2': 'D2a v4/D2as v4',
+        'EP3': 'D4a v4/D4as v4'
+      };
+      const vmSku = planVmMap[p.sku];
+      if (vmSku) addToMap(vmSku, entry);
     });
 
     // Flat resource list for lookup

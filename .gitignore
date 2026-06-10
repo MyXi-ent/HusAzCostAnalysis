@@ -4,3 +4,4 @@ package-lock.json
 api/package-lock.json
 query-cosmos.js
 upload-cosmos.js
+check-vms.js

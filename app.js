@@ -106,7 +106,7 @@ function getResourcePortalUrl(resourceId) {
 function buildResourceBadge(mapped) {
     const r = mapped[0];
     const url = getResourcePortalUrl(r.id);
-    const title = mapped.map(m => m.name).join(', ');
+    const title = mapped.map(m => `${m.name}${m.type ? ' (' + m.type + ')' : ''}`).join(', ');
     if (url) {
         return `<a class="resource-badge resource-badge-link" href="${url}" target="_blank" title="${title}">${r.name}</a>`;
     }
