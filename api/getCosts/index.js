@@ -1,73 +1,103 @@
-const { CosmosClient } = require('@azure/cosmos');
+const https = require('https');
+const crypto = require('crypto');
 
-const endpoint = process.env.COSMOS_ENDPOINT || 'https://husazcomoserverless.documents.azure.com:443/';
+const host = 'husazcomoserverless.documents.azure.com';
 const key = process.env.COSMOS_KEY;
-const dbName = 'HusAzConsumption';
-const containerName = 'HusAzConsumptionCosmoDB';
+const dbId = 'HusAzConsumption';
+const collId = 'HusAzConsumptionCosmoDB';
 
-let client;
-function getContainer() {
-  if (!client) client = new CosmosClient({ endpoint, key });
-  return client.database(dbName).container(containerName);
+function generateAuth(verb, resourceType, resourceLink, date) {
+  const text = `${verb}\n${resourceType}\n${resourceLink}\n${date.toLowerCase()}\n\n`;
+  const sig = crypto.createHmac('sha256', Buffer.from(key, 'base64')).update(text).digest('base64');
+  return encodeURIComponent(`type=master&ver=1.0&sig=${sig}`);
+}
+
+function cosmosQuery(sql, parameters) {
+  return new Promise((resolve, reject) => {
+    const date = new Date().toUTCString();
+    const resourceLink = `dbs/${dbId}/colls/${collId}`;
+    const token = generateAuth('post', 'docs', resourceLink, date);
+    const body = JSON.stringify(parameters ? { query: sql, parameters } : { query: sql });
+
+    const opts = {
+      hostname: host,
+      port: 443,
+      path: `/${resourceLink}/docs`,
+      method: 'POST',
+      headers: {
+        'Authorization': token,
+        'x-ms-date': date,
+        'x-ms-version': '2020-07-15',
+        'Content-Type': 'application/query+json',
+        'x-ms-documentdb-isquery': 'True',
+        'x-ms-documentdb-query-enablecrosspartition': 'True',
+        'x-ms-max-item-count': '-1',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+
+    const req = https.request(opts, res => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.code) reject(new Error(parsed.message));
+          else resolve(parsed.Documents || []);
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
 }
 
 module.exports = async function (context, req) {
   const startDate = req.query.startDate || req.body?.startDate;
   const endDate = req.query.endDate || req.body?.endDate;
-  const groupBy = req.query.groupBy || req.body?.groupBy || 'ServiceName';
 
   if (!startDate || !endDate) {
     context.res = { status: 400, body: { error: 'startDate and endDate required' } };
     return;
   }
 
-  const container = getContainer();
-
   try {
-    // Daily totals
-    const { resources: dailyTotals } = await container.items.query({
-      query: `SELECT c.Date, SUM(c.Cost) AS totalCost FROM c 
-              WHERE c.Date >= @start AND c.Date <= @end 
-              GROUP BY c.Date`,
-      parameters: [
-        { name: '@start', value: `${startDate}T00:00:00` },
-        { name: '@end', value: `${endDate}T00:00:00` }
-      ]
-    }).fetchAll();
+    // Fetch all records in range (Cosmos REST API handles cross-partition with the header)
+    const docs = await cosmosQuery(
+      `SELECT c.Date, c.ServiceName, c.Cost FROM c WHERE c.Date >= '${startDate}T00:00:00' AND c.Date <= '${endDate}T00:00:00'`
+    );
 
-    // Service breakdown
-    const { resources: serviceBreakdown } = await container.items.query({
-      query: `SELECT c.ServiceName, SUM(c.Cost) AS totalCost, COUNT(1) AS records FROM c 
-              WHERE c.Date >= @start AND c.Date <= @end 
-              GROUP BY c.ServiceName`,
-      parameters: [
-        { name: '@start', value: `${startDate}T00:00:00` },
-        { name: '@end', value: `${endDate}T00:00:00` }
-      ]
-    }).fetchAll();
+    // Aggregate daily totals
+    const dailyMap = {};
+    const serviceMap = {};
+    for (const d of docs) {
+      const date = d.Date.split('T')[0];
+      dailyMap[date] = (dailyMap[date] || 0) + d.Cost;
+      if (!serviceMap[d.ServiceName]) serviceMap[d.ServiceName] = { cost: 0, records: 0 };
+      serviceMap[d.ServiceName].cost += d.Cost;
+      serviceMap[d.ServiceName].records++;
+    }
 
-    // Sort daily by date, services by cost desc
-    dailyTotals.sort((a, b) => a.Date.localeCompare(b.Date));
-    serviceBreakdown.sort((a, b) => b.totalCost - a.totalCost);
+    const dailyTotals = Object.entries(dailyMap)
+      .map(([date, cost]) => ({ date, cost: Math.round(cost * 100) / 100 }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const serviceBreakdown = Object.entries(serviceMap)
+      .map(([service, v]) => ({ service, cost: Math.round(v.cost * 100) / 100, records: v.records }))
+      .sort((a, b) => b.cost - a.cost);
+
+    const totalCost = Math.round(serviceBreakdown.reduce((s, v) => s + v.cost, 0) * 100) / 100;
 
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: {
-        dateRange: { startDate, endDate },
-        dailyTotals: dailyTotals.map(d => ({
-          date: d.Date.split('T')[0],
-          cost: Math.round(d.totalCost * 100) / 100
-        })),
-        serviceBreakdown: serviceBreakdown.map(s => ({
-          service: s.ServiceName,
-          cost: Math.round(s.totalCost * 100) / 100,
-          records: s.records
-        })),
-        totalCost: Math.round(serviceBreakdown.reduce((sum, s) => sum + s.totalCost, 0) * 100) / 100
-      }
+      body: { dateRange: { startDate, endDate }, dailyTotals, serviceBreakdown, totalCost }
     };
   } catch (err) {
+    context.res = { status: 500, body: { error: err.message } };
+  }
+};
     context.res = { status: 500, body: { error: err.message } };
   }
 };
