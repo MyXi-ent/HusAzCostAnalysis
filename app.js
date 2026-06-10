@@ -77,6 +77,7 @@ let currentGranularity = 'day';
 let currentView = 'cards';
 let currentSort = { key: 'cost', dir: 'desc' };
 let resourceData = null;
+let currentResourceFilter = null; // { service, resource }
 
 async function loadResourceMap() {
     try {
@@ -234,6 +235,33 @@ function renderChart(dailyTotals) {
     });
 }
 
+function setResourceFilter(service, resource) {
+    currentResourceFilter = { service, resource };
+    document.getElementById('resourceFilterBanner').style.display = 'flex';
+    document.getElementById('resourceFilterText').textContent = `${service} → ${resource}`;
+    refreshView();
+}
+
+function clearResourceFilter() {
+    currentResourceFilter = null;
+    document.getElementById('resourceFilterBanner').style.display = 'none';
+    refreshView();
+}
+
+function applyResourceFilter(serviceBreakdown) {
+    if (!currentResourceFilter) return serviceBreakdown;
+    const { service, resource } = currentResourceFilter;
+    return serviceBreakdown
+        .filter(svc => svc.service === service)
+        .map(svc => ({
+            ...svc,
+            resources: (svc.resources || []).filter(r => r.name === resource),
+            cost: (svc.resources || []).filter(r => r.name === resource).reduce((s, r) => s + r.cost, 0),
+            records: (svc.resources || []).filter(r => r.name === resource).reduce((s, r) => s + r.records, 0)
+        }))
+        .filter(svc => svc.resources.length > 0);
+}
+
 function filterServices(serviceBreakdown, query) {
     if (!query) return serviceBreakdown;
     const q = query.toLowerCase();
@@ -272,14 +300,23 @@ function renderTable(serviceBreakdown) {
         const svcHtml = portalUrl
             ? `<a class="service-link" href="${portalUrl}" target="_blank">${r.service}</a>`
             : r.service;
+        const clickable = r.resource !== '—' ? 'class="resource-clickable-row"' : '';
         return `
-        <tr>
+        <tr ${clickable} data-service="${r.service}" data-resource="${r.resource}">
             <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${svcHtml}</td>
             <td>${r.resource}</td>
             <td>${formatCost(r.cost)}</td>
             <td>${r.records}</td>
         </tr>`;
     }).join('');
+
+    // Table row click to filter
+    wrapper.querySelectorAll('.resource-clickable-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('a')) return;
+            setResourceFilter(row.dataset.service, row.dataset.resource);
+        });
+    });
 
     // Update sort indicators
     document.querySelectorAll('.service-table th').forEach(th => {
@@ -304,7 +341,7 @@ function renderServices(serviceBreakdown) {
             const mapped = getResourceName(svc.service, r.name);
             const badge = mapped ? buildResourceBadge(mapped) : '';
             return `
-            <div class="resource-row">
+            <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
                 <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
                 <span class="resource-cost">${formatCost(r.cost)}</span>
             </div>`;
@@ -318,7 +355,7 @@ function renderServices(serviceBreakdown) {
                     const mapped = getResourceName(svc.service, r.name);
                     const badge = mapped ? buildResourceBadge(mapped) : '';
                     return `
-                    <div class="resource-row">
+                    <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
                         <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
                         <span class="resource-cost">${formatCost(r.cost)}</span>
                     </div>`;
@@ -359,12 +396,20 @@ function renderServices(serviceBreakdown) {
             row.style.display = 'none';
         });
     });
+
+    grid.querySelectorAll('.resource-clickable').forEach(row => {
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('.resource-badge-link')) return; // don't hijack badge clicks
+            setResourceFilter(row.dataset.service, row.dataset.resource);
+        });
+    });
 }
 
 function refreshView() {
     if (!currentData) return;
     const query = document.getElementById('serviceSearch').value;
-    const filtered = filterServices(currentData.serviceBreakdown, query);
+    let filtered = applyResourceFilter(currentData.serviceBreakdown);
+    filtered = filterServices(filtered, query);
     if (currentView === 'cards') {
         document.getElementById('serviceGrid').style.display = '';
         document.getElementById('serviceTableWrapper').style.display = 'none';
