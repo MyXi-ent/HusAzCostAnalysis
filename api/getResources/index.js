@@ -101,16 +101,36 @@ module.exports = async function (context, req) {
     // Build SKU-to-resource mapping
     const resourceMap = {};
 
+    function addToMap(key, entry) {
+      if (!key) return;
+      if (!resourceMap[key]) resourceMap[key] = [];
+      resourceMap[key].push(entry);
+    }
+
     vms.forEach(vm => {
-      const sku = (vm.sku || '').replace('Standard_', '').replace(/_/g, ' ');
-      if (!resourceMap[sku]) resourceMap[sku] = [];
-      resourceMap[sku].push({ name: vm.name, type: 'VM', resourceGroup: vm.resourceGroup, id: vm.id });
+      const entry = { name: vm.name, type: 'VM', resourceGroup: vm.resourceGroup, id: vm.id };
+      const raw = (vm.sku || '').replace('Standard_', '');
+      // "D16ads_v5" → "D16ads v5"
+      const spaced = raw.replace(/_/g, ' ');
+      addToMap(spaced, entry);
+      // Also add with 's' variants: "D2s_v3" → "D2 v3/D2s v3"
+      const baseMatch = raw.match(/^([A-Za-z]+\d+)(a?s?)_?(v\d+)$/);
+      if (baseMatch) {
+        const [, base, suffix, ver] = baseMatch;
+        addToMap(`${base} ${ver}/${base}${suffix} ${ver}`, entry);
+        addToMap(`${base}${suffix} ${ver}`, entry);
+        addToMap(`${base} ${ver}`, entry);
+      }
     });
 
     plans.forEach(p => {
-      const sku = `${p.sku} ${p.tier || ''}`.trim();
-      if (!resourceMap[sku]) resourceMap[sku] = [];
-      resourceMap[sku].push({ name: p.name, type: 'App Service Plan', resourceGroup: p.resourceGroup, id: p.id });
+      const entry = { name: p.name, type: 'App Service Plan', resourceGroup: p.resourceGroup, id: p.id };
+      addToMap(`${p.sku || ''} ${p.tier || ''}`.trim(), entry);
+      // Also map by plan tier: "P2 v3 App" → "P2v3"
+      if (p.sku) {
+        addToMap(p.sku, entry);
+        addToMap(`${p.sku} App`, entry);
+      }
     });
 
     // Flat resource list for lookup
@@ -120,7 +140,14 @@ module.exports = async function (context, req) {
       functions: functions.map(f => ({ name: f.name, resourceGroup: f.resourceGroup, id: f.id })),
       cosmos: cosmos.map(c => ({ name: c.name, resourceGroup: c.resourceGroup, id: c.id })),
       comms: comms.map(c => ({ name: c.name, resourceGroup: c.resourceGroup, id: c.id })),
-      skuMap: resourceMap
+      skuMap: resourceMap,
+      // Include named resources for service-level matching
+      byService: {
+        'Functions': functions.map(f => ({ name: f.name, id: f.id })),
+        'Azure Cosmos DB': cosmos.map(c => ({ name: c.name, id: c.id })),
+        'Messaging': comms.map(c => ({ name: c.name, id: c.id })),
+        'Phone Numbers': comms.map(c => ({ name: c.name, id: c.id }))
+      }
     };
 
     context.log(`Found ${vms.length} VMs, ${plans.length} plans, ${functions.length} functions`);

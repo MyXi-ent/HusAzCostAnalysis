@@ -98,6 +98,21 @@ function getResourceName(serviceName, serviceResource) {
     return null;
 }
 
+function getResourcePortalUrl(resourceId) {
+    if (!resourceId) return null;
+    return `https://portal.azure.com/#@71a46d06-d6c8-4e81-8fe9-d2d6355392df/resource${resourceId}`;
+}
+
+function buildResourceBadge(mapped) {
+    const r = mapped[0];
+    const url = getResourcePortalUrl(r.id);
+    const title = mapped.map(m => m.name).join(', ');
+    if (url) {
+        return `<a class="resource-badge resource-badge-link" href="${url}" target="_blank" title="${title}">${r.name}</a>`;
+    }
+    return `<span class="resource-badge" title="${title}">${r.name}</span>`;
+}
+
 function getIconPath(serviceName) {
     const slug = ICON_MAP[serviceName];
     return slug ? `icons/${slug}.svg` : 'icons/azure-monitor.svg';
@@ -267,7 +282,7 @@ function renderServices(serviceBreakdown) {
         const hasMore = resources.length > 10;
         const resourcesHtml = top10.map(r => {
             const mapped = getResourceName(svc.service, r.name);
-            const badge = mapped ? `<span class="resource-badge" title="${mapped.map(m => m.name).join(', ')}">${mapped[0].name}</span>` : '';
+            const badge = mapped ? buildResourceBadge(mapped) : '';
             return `
             <div class="resource-row">
                 <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
@@ -281,7 +296,7 @@ function renderServices(serviceBreakdown) {
             <div class="resource-overflow" id="overflow-${idx}" style="display:none">
                 ${resources.slice(10).map(r => {
                     const mapped = getResourceName(svc.service, r.name);
-                    const badge = mapped ? `<span class="resource-badge" title="${mapped.map(m => m.name).join(', ')}">${mapped[0].name}</span>` : '';
+                    const badge = mapped ? buildResourceBadge(mapped) : '';
                     return `
                     <div class="resource-row">
                         <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
