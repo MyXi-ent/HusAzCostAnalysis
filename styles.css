@@ -16,8 +16,9 @@ header {
     border-bottom: 1px solid #2a3a5c;
 }
 
-.sponsor-showing { margin-left: auto; }
-.date-range-value { color: #90caf9 !important; }
+.date-range-display { margin-left: auto; text-align: center; }
+.date-range-label { display: block; font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.date-range-value { display: block; font-size: 1.1rem; color: #90caf9; font-weight: 500; }
 
 .header-left { display: flex; align-items: center; gap: 16px; }
 
