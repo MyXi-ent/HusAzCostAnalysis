@@ -198,13 +198,29 @@ function renderServices(serviceBreakdown) {
     const grid = document.getElementById('serviceGrid');
     const maxCost = serviceBreakdown[0]?.cost || 1;
 
-    grid.innerHTML = serviceBreakdown.map(svc => {
-        const resourcesHtml = (svc.resources || []).map(r => `
+    grid.innerHTML = serviceBreakdown.map((svc, idx) => {
+        const resources = svc.resources || [];
+        const top10 = resources.slice(0, 10);
+        const hasMore = resources.length > 10;
+        const resourcesHtml = top10.map(r => `
             <div class="resource-row">
                 <span class="resource-name" title="${r.name}">${r.name}</span>
                 <span class="resource-cost">${formatCost(r.cost)}</span>
             </div>
         `).join('');
+        const moreHtml = hasMore ? `
+            <div class="resource-row resource-more" data-svc-idx="${idx}">
+                <a href="#" class="show-more-link">Show ${resources.length - 10} more...</a>
+            </div>
+            <div class="resource-overflow" id="overflow-${idx}" style="display:none">
+                ${resources.slice(10).map(r => `
+                    <div class="resource-row">
+                        <span class="resource-name" title="${r.name}">${r.name}</span>
+                        <span class="resource-cost">${formatCost(r.cost)}</span>
+                    </div>
+                `).join('')}
+            </div>
+        ` : '';
 
         return `
         <div class="service-card">
@@ -218,11 +234,22 @@ function renderServices(serviceBreakdown) {
                 <div class="service-bar">
                     <div class="service-bar-fill" style="width: ${(svc.cost / maxCost * 100).toFixed(1)}%"></div>
                 </div>
-                ${resourcesHtml ? `<div class="resource-list">${resourcesHtml}</div>` : ''}
+                ${resourcesHtml ? `<div class="resource-list">${resourcesHtml}${moreHtml}</div>` : ''}
             </div>
         </div>
     `;
     }).join('');
+
+    grid.querySelectorAll('.show-more-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const row = e.target.closest('.resource-more');
+            const idx = row.dataset.svcIdx;
+            const overflow = document.getElementById('overflow-' + idx);
+            overflow.style.display = '';
+            row.style.display = 'none';
+        });
+    });
 }
 
 function refreshView() {
