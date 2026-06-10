@@ -79,14 +79,17 @@ async function cosmosQuery(sql, parameters) {
 }
 
 module.exports = async function (context, req) {
+  context.log('getCosts function invoked', { method: req.method, url: req.url });
   const startDate = req.query.startDate || req.body?.startDate;
   const endDate = req.query.endDate || req.body?.endDate;
 
   if (!startDate || !endDate) {
+    context.log.warn('Missing date parameters', { startDate, endDate });
     context.res = { status: 400, body: { error: 'startDate and endDate required' } };
     return;
   }
 
+  context.log(`Querying Cosmos DB for range: ${startDate} to ${endDate}`);
   try {
     const docs = await cosmosQuery(
       "SELECT c.Date, c.ServiceName, c.Cost FROM c WHERE c.Date >= @start AND c.Date <= @end",
@@ -113,15 +116,14 @@ module.exports = async function (context, req) {
 
     const totalCost = Math.round(serviceBreakdown.reduce((s, v) => s + v.cost, 0) * 100) / 100;
 
+    context.log(`Query returned ${docs.length} documents, total cost: $${totalCost}`);
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
       body: { dateRange: { startDate, endDate }, dailyTotals, serviceBreakdown, totalCost }
     };
   } catch (err) {
-    context.res = { status: 500, body: { error: err.message } };
-  }
-};
+    context.log.error('getCosts failed', err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
 };
