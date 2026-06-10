@@ -32,7 +32,12 @@ h1 {
     font-size: 0.8rem;
 }
 
-.header-right { display: flex; gap: 12px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+
+.user-info { display: flex; align-items: center; gap: 10px; margin-left: 12px; padding-left: 12px; border-left: 1px solid #2a3a5c; }
+.user-name { color: #90caf9; font-size: 0.85rem; }
+.sign-out-link { color: #f48fb1; font-size: 0.8rem; text-decoration: none; }
+.sign-out-link:hover { text-decoration: underline; }
 
 .btn {
     display: inline-flex;

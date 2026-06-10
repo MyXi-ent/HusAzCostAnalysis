@@ -243,6 +243,18 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     e.target.value = '';
 });
 
+// Load user info
+(async () => {
+    try {
+        const res = await fetch('/.auth/me');
+        const data = await res.json();
+        const user = data.clientPrincipal;
+        if (user) {
+            document.getElementById('userName').textContent = user.userDetails;
+        }
+    } catch (e) { /* not logged in */ }
+})();
+
 // Initial load — 90 days
 const { startDate, endDate } = getDateRange(90);
 loadData(startDate, endDate);
