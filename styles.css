@@ -16,6 +16,8 @@ header {
     border-bottom: 1px solid #2a3a5c;
 }
 
+.header-center { text-align: center; }
+
 .header-left { display: flex; align-items: center; gap: 16px; }
 
 h1 {
@@ -140,7 +142,7 @@ h1 {
     color: #4fc3f7;
 }
 
-.date-range-display { text-align: right; margin-left: 24px; }
+
 .date-range-label { display: block; font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
 .date-range-value { display: block; font-size: 0.9rem; color: #90caf9; font-weight: 500; }
 
