@@ -16,7 +16,8 @@ header {
     border-bottom: 1px solid #2a3a5c;
 }
 
-.header-center { text-align: center; }
+.sponsor-showing { margin-left: auto; }
+.date-range-value { color: #90caf9 !important; }
 
 .header-left { display: flex; align-items: center; gap: 16px; }
 
