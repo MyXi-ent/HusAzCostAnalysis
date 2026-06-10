@@ -86,6 +86,12 @@
 
     </div>
 
+    <div class="resource-filter-banner" id="resourceFilterBanner" style="display:none">
+        <span class="filter-label">Filtered:</span>
+        <span class="filter-text" id="resourceFilterText"></span>
+        <button class="filter-clear" onclick="clearResourceFilter()">✕ Clear</button>
+    </div>
+
     <div class="chart-container">
         <canvas id="dailyChart"></canvas>
     </div>
@@ -98,12 +104,6 @@
             <button class="view-btn active" data-view="cards" title="Cards view">&#9638;</button>
             <button class="view-btn" data-view="table" title="Table view">&#9776;</button>
         </div>
-    </div>
-
-    <div class="resource-filter-banner" id="resourceFilterBanner" style="display:none">
-        <span class="filter-label">Filtered:</span>
-        <span class="filter-text" id="resourceFilterText"></span>
-        <button class="filter-clear" onclick="clearResourceFilter()">✕ Clear</button>
     </div>
 
     <div class="service-grid" id="serviceGrid">
