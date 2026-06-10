@@ -78,6 +78,7 @@ let currentView = 'cards';
 let currentSort = { key: 'cost', dir: 'desc' };
 let resourceData = null;
 let currentResourceFilter = null; // { service, resource }
+let currentDateRange = { startDate: null, endDate: null };
 
 async function loadResourceMap() {
     try {
@@ -134,8 +135,12 @@ function getDateRange(days) {
     };
 }
 
-async function fetchCostData(startDate, endDate) {
-    const resp = await fetch(`/api/getCosts?startDate=${startDate}&endDate=${endDate}`);
+async function fetchCostData(startDate, endDate, filter) {
+    let url = `/api/getCosts?startDate=${startDate}&endDate=${endDate}`;
+    if (filter) {
+        url += `&service=${encodeURIComponent(filter.service)}&resource=${encodeURIComponent(filter.resource)}`;
+    }
+    const resp = await fetch(url);
     if (!resp.ok) {
         const text = await resp.text();
         console.error('API Error Response:', resp.status, text);
@@ -239,13 +244,17 @@ function setResourceFilter(service, resource) {
     currentResourceFilter = { service, resource };
     document.getElementById('resourceFilterBanner').style.display = 'flex';
     document.getElementById('resourceFilterText').textContent = `${service} → ${resource}`;
-    refreshView();
+    if (currentDateRange.startDate) {
+        loadData(currentDateRange.startDate, currentDateRange.endDate);
+    }
 }
 
 function clearResourceFilter() {
     currentResourceFilter = null;
     document.getElementById('resourceFilterBanner').style.display = 'none';
-    refreshView();
+    if (currentDateRange.startDate) {
+        loadData(currentDateRange.startDate, currentDateRange.endDate);
+    }
 }
 
 function applyResourceFilter(serviceBreakdown) {
@@ -442,12 +451,13 @@ function renderData(data, source) {
 }
 
 async function loadData(startDate, endDate) {
+    currentDateRange = { startDate, endDate };
     const grid = document.getElementById('serviceGrid');
     grid.innerHTML = '<div class="loading">Loading cost data...</div>';
     document.querySelector('.total-value').textContent = '—';
 
     try {
-        const data = await fetchCostData(startDate, endDate);
+        const data = await fetchCostData(startDate, endDate, currentResourceFilter);
         renderData(data, 'api');
     } catch (err) {
         grid.innerHTML = `<div class="loading">Error: ${err.message}</div>`;

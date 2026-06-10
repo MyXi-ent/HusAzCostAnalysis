@@ -82,6 +82,8 @@ module.exports = async function (context, req) {
   context.log('getCosts function invoked', { method: req.method, url: req.url });
   const startDate = req.query.startDate || req.body?.startDate;
   const endDate = req.query.endDate || req.body?.endDate;
+  const filterService = req.query.service || null;
+  const filterResource = req.query.resource || null;
 
   if (!startDate || !endDate) {
     context.log.warn('Missing date parameters', { startDate, endDate });
@@ -89,7 +91,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.log(`Querying Cosmos DB for range: ${startDate} to ${endDate}`);
+  context.log(`Querying Cosmos DB for range: ${startDate} to ${endDate}, filter: ${filterService}/${filterResource}`);
   try {
     const docs = await cosmosQuery(
       "SELECT c.Date, c.ServiceName, c.ServiceResource, c.Cost FROM c WHERE c.Date >= @start AND c.Date <= @end",
@@ -100,11 +102,19 @@ module.exports = async function (context, req) {
     const serviceMap = {};
     for (const d of docs) {
       const date = d.Date.split('T')[0];
-      dailyMap[date] = (dailyMap[date] || 0) + d.Cost;
+      const res = d.ServiceResource || 'Other';
+      const matchesFilter = (!filterService || d.ServiceName === filterService) &&
+                            (!filterResource || res === filterResource);
+
+      // dailyMap only includes filtered data when filter is active
+      if (matchesFilter) {
+        dailyMap[date] = (dailyMap[date] || 0) + d.Cost;
+      }
+
+      // serviceMap always includes everything (for breakdown display)
       if (!serviceMap[d.ServiceName]) serviceMap[d.ServiceName] = { cost: 0, records: 0, resources: {} };
       serviceMap[d.ServiceName].cost += d.Cost;
       serviceMap[d.ServiceName].records++;
-      const res = d.ServiceResource || 'Other';
       if (!serviceMap[d.ServiceName].resources[res]) serviceMap[d.ServiceName].resources[res] = { cost: 0, records: 0 };
       serviceMap[d.ServiceName].resources[res].cost += d.Cost;
       serviceMap[d.ServiceName].resources[res].records++;
@@ -125,7 +135,8 @@ module.exports = async function (context, req) {
       }))
       .sort((a, b) => b.cost - a.cost);
 
-    const totalCost = Math.round(serviceBreakdown.reduce((s, v) => s + v.cost, 0) * 100) / 100;
+    // totalCost reflects the filtered view (dailyTotals sum)
+    const totalCost = Math.round(dailyTotals.reduce((s, d) => s + d.cost, 0) * 100) / 100;
 
     context.log(`Query returned ${docs.length} documents, total cost: $${totalCost}`);
     context.res = {
