@@ -59,7 +59,10 @@ function getDateRange(days) {
 
 async function fetchCostData(startDate, endDate) {
     const resp = await fetch(`/api/getCosts?startDate=${startDate}&endDate=${endDate}`);
-    if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => null);
+        throw new Error(errBody?.error || `API error: ${resp.status}`);
+    }
     return resp.json();
 }
 
