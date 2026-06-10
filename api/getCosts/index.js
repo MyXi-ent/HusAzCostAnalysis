@@ -18,7 +18,7 @@ function httpRequest(opts, body) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        try { resolve({ status: res.statusCode, headers: res.headers, body: JSON.parse(data) }); }
         catch (e) { reject(e); }
       });
     });
@@ -72,7 +72,7 @@ async function cosmosQuery(sql, parameters) {
       }, body);
       if (res.body.code) throw new Error(res.body.message);
       allDocs = allDocs.concat(res.body.Documents || []);
-      continuation = res.body._continuation || null;
+      continuation = res.headers['x-ms-continuation'] || null;
     } while (continuation);
   }
   return allDocs;
