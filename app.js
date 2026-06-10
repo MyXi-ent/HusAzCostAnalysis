@@ -441,6 +441,9 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
 
         if (btn.dataset.custom) {
             document.getElementById('customDateRange').style.display = 'flex';
+        } else if (btn.dataset.all) {
+            document.getElementById('customDateRange').style.display = 'none';
+            loadData('2025-06-01', new Date().toISOString().split('T')[0]);
         } else {
             document.getElementById('customDateRange').style.display = 'none';
             const { startDate, endDate } = getDateRange(parseInt(btn.dataset.days));
