@@ -317,6 +317,10 @@ function refreshView() {
 function renderData(data, source) {
     currentData = data;
     document.querySelector('.total-value').textContent = formatCost(data.totalCost);
+    if (data.dateRange) {
+        const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        document.getElementById('dateRangeValue').textContent = `${fmt(data.dateRange.startDate)} — ${fmt(data.dateRange.endDate)}`;
+    }
     renderChart(data.dailyTotals);
     refreshView();
 
