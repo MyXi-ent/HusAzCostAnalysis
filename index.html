@@ -4,62 +4,55 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Azure Cost Analysis</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f4f4; color: #333; padding: 40px; }
-        h1 { color: #0078d4; margin-bottom: 20px; }
-        .card { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .card h2 { color: #0078d4; margin-bottom: 12px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #eee; }
-        th { background: #f9f9f9; font-weight: 600; }
-        .cost { font-weight: 600; color: #107c10; }
-        .free { color: #0078d4; font-weight: 600; }
-        footer { margin-top: 40px; color: #666; font-size: 0.9em; }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Azure Cost Analysis — Service Breakdown</h1>
+    <header>
+        <div class="header-left">
+            <h1>Azure Cost Analysis</h1>
+            <span class="subscription-badge">Xi_Sponsored_Subscription</span>
+        </div>
+        <div class="header-right">
+            <button id="uploadBtn" class="btn btn-secondary" title="Upload JSON data">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1L3 6h3v5h4V6h3L8 1zM2 12v2h12v-2H2z"/></svg>
+                Upload JSON
+            </button>
+            <input type="file" id="fileInput" accept=".json" hidden>
+        </div>
+    </header>
 
-    <div class="card">
-        <h2>Static Web Apps (SWA)</h2>
-        <table>
-            <tr><th>SKU</th><th>Monthly Cost</th><th>Features</th></tr>
-            <tr><td>Free</td><td class="free">$0</td><td>100 GB bandwidth, 2 custom domains, SSL, GitHub Actions CI/CD</td></tr>
-            <tr><td>Standard</td><td class="cost">$9/mo</td><td>Unlimited bandwidth, 5 custom domains, SWA CLI, backend linking</td></tr>
-        </table>
+    <div class="controls">
+        <div class="date-presets">
+            <button class="preset-btn" data-days="30">30 Days</button>
+            <button class="preset-btn" data-days="60">60 Days</button>
+            <button class="preset-btn active" data-days="90">90 Days</button>
+            <button class="preset-btn" data-days="365">Year</button>
+            <button class="preset-btn" data-custom="true">Custom</button>
+        </div>
+        <div class="date-custom" id="customDateRange" style="display:none">
+            <input type="date" id="startDate">
+            <span>to</span>
+            <input type="date" id="endDate">
+            <button class="btn btn-primary" id="applyDates">Apply</button>
+        </div>
+        <div class="total-cost" id="totalCost">
+            <span class="total-label">Total Spend</span>
+            <span class="total-value">—</span>
+        </div>
     </div>
 
-    <div class="card">
-        <h2>Function Apps</h2>
-        <table>
-            <tr><th>Plan</th><th>Monthly Cost</th><th>Notes</th></tr>
-            <tr><td>Consumption (Y1)</td><td class="free">~$0 (1M free executions)</td><td>Cold starts, pay-per-use</td></tr>
-            <tr><td>Elastic Premium (EP1)</td><td class="cost">~$150-220/mo</td><td>Always warm, VNET, no cold starts</td></tr>
-            <tr><td>App Service (B1)</td><td class="cost">~$13/mo</td><td>Basic tier, always on</td></tr>
-        </table>
+    <div class="chart-container">
+        <canvas id="dailyChart"></canvas>
     </div>
 
-    <div class="card">
-        <h2>Storage Accounts</h2>
-        <table>
-            <tr><th>Tier</th><th>Monthly Cost</th><th>Notes</th></tr>
-            <tr><td>LRS (Hot)</td><td class="cost">$0.018/GB</td><td>Locally redundant, general purpose v2</td></tr>
-            <tr><td>Table Storage</td><td class="cost">$0.045/GB + $0.00036/10K txn</td><td>NoSQL key-value</td></tr>
-        </table>
+    <div class="service-grid" id="serviceGrid">
+        <div class="loading">Loading cost data...</div>
     </div>
 
-    <div class="card">
-        <h2>Azure OpenAI</h2>
-        <table>
-            <tr><th>Model</th><th>Cost</th><th>Notes</th></tr>
-            <tr><td>GPT-4o</td><td class="cost">$2.50/1M input, $10/1M output</td><td>Most capable</td></tr>
-            <tr><td>GPT-4o-mini</td><td class="cost">$0.15/1M input, $0.60/1M output</td><td>Cost-effective</td></tr>
-        </table>
-    </div>
+    <div id="dataSource" class="data-source"></div>
 
-    <footer>
-        <p>Deployed on Azure Static Web Apps (Free tier) | Last updated: June 2026</p>
-    </footer>
+    <script src="app.js"></script>
 </body>
 </html>

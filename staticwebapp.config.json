@@ -21,5 +21,8 @@
   },
   "globalHeaders": {
     "X-Content-Type-Options": "nosniff"
+  },
+  "platform": {
+    "apiRuntime": "node:18"
   }
 }
