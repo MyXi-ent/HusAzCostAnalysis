@@ -140,6 +140,22 @@ h1 {
     color: #4fc3f7;
 }
 
+.sponsorship-bar {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    padding: 12px 32px;
+    background: #0f1a30;
+    border-bottom: 1px solid #2a3a5c;
+}
+
+.sponsor-item { display: flex; flex-direction: column; gap: 2px; }
+.sponsor-label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.sponsor-value { font-size: 1.1rem; font-weight: 600; color: #e0e0e0; }
+.sponsor-used { color: #ef5350; }
+.sponsor-remaining { color: #66bb6a; }
+.sponsor-days { color: #ffb74d; }
+
 .chart-container {
     padding: 24px 32px;
     height: 300px;
