@@ -210,6 +210,31 @@ h1 {
     transition: width 0.5s ease;
 }
 
+.resource-list {
+    margin-top: 8px;
+    border-top: 1px solid #2a3a5c;
+    padding-top: 6px;
+}
+.resource-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0;
+    font-size: 0.75rem;
+}
+.resource-name {
+    color: #90caf9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 70%;
+}
+.resource-cost {
+    color: #a5d6a7;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
 .loading {
     grid-column: 1 / -1;
     text-align: center;

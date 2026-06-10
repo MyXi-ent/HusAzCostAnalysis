@@ -92,7 +92,7 @@ module.exports = async function (context, req) {
   context.log(`Querying Cosmos DB for range: ${startDate} to ${endDate}`);
   try {
     const docs = await cosmosQuery(
-      "SELECT c.Date, c.ServiceName, c.Cost FROM c WHERE c.Date >= @start AND c.Date <= @end",
+      "SELECT c.Date, c.ServiceName, c.ServiceResource, c.Cost FROM c WHERE c.Date >= @start AND c.Date <= @end",
       [{ name: "@start", value: `${startDate}T00:00:00` }, { name: "@end", value: `${endDate}T00:00:00` }]
     );
 
@@ -101,9 +101,13 @@ module.exports = async function (context, req) {
     for (const d of docs) {
       const date = d.Date.split('T')[0];
       dailyMap[date] = (dailyMap[date] || 0) + d.Cost;
-      if (!serviceMap[d.ServiceName]) serviceMap[d.ServiceName] = { cost: 0, records: 0 };
+      if (!serviceMap[d.ServiceName]) serviceMap[d.ServiceName] = { cost: 0, records: 0, resources: {} };
       serviceMap[d.ServiceName].cost += d.Cost;
       serviceMap[d.ServiceName].records++;
+      const res = d.ServiceResource || 'Other';
+      if (!serviceMap[d.ServiceName].resources[res]) serviceMap[d.ServiceName].resources[res] = { cost: 0, records: 0 };
+      serviceMap[d.ServiceName].resources[res].cost += d.Cost;
+      serviceMap[d.ServiceName].resources[res].records++;
     }
 
     const dailyTotals = Object.entries(dailyMap)
@@ -111,7 +115,14 @@ module.exports = async function (context, req) {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const serviceBreakdown = Object.entries(serviceMap)
-      .map(([service, v]) => ({ service, cost: Math.round(v.cost * 100) / 100, records: v.records }))
+      .map(([service, v]) => ({
+        service,
+        cost: Math.round(v.cost * 100) / 100,
+        records: v.records,
+        resources: Object.entries(v.resources)
+          .map(([name, r]) => ({ name, cost: Math.round(r.cost * 100) / 100, records: r.records }))
+          .sort((a, b) => b.cost - a.cost)
+      }))
       .sort((a, b) => b.cost - a.cost);
 
     const totalCost = Math.round(serviceBreakdown.reduce((s, v) => s + v.cost, 0) * 100) / 100;

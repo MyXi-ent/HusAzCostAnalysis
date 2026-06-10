@@ -143,7 +143,15 @@ function renderServices(serviceBreakdown) {
     const grid = document.getElementById('serviceGrid');
     const maxCost = serviceBreakdown[0]?.cost || 1;
 
-    grid.innerHTML = serviceBreakdown.map(svc => `
+    grid.innerHTML = serviceBreakdown.map(svc => {
+        const resourcesHtml = (svc.resources || []).map(r => `
+            <div class="resource-row">
+                <span class="resource-name" title="${r.name}">${r.name}</span>
+                <span class="resource-cost">${formatCost(r.cost)}</span>
+            </div>
+        `).join('');
+
+        return `
         <div class="service-card">
             <div class="service-icon">
                 <img src="${getIconPath(svc.service)}" alt="${svc.service}" onerror="this.src='icons/azure-monitor.svg'">
@@ -155,9 +163,11 @@ function renderServices(serviceBreakdown) {
                 <div class="service-bar">
                     <div class="service-bar-fill" style="width: ${(svc.cost / maxCost * 100).toFixed(1)}%"></div>
                 </div>
+                ${resourcesHtml ? `<div class="resource-list">${resourcesHtml}</div>` : ''}
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function renderData(data, source) {
