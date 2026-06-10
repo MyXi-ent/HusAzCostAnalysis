@@ -55,8 +55,32 @@
         <canvas id="dailyChart"></canvas>
     </div>
 
+    <div class="view-controls">
+        <div class="search-box">
+            <input type="text" id="serviceSearch" placeholder="Search services or resources...">
+        </div>
+        <div class="view-toggle">
+            <button class="view-btn active" data-view="cards" title="Cards view">&#9638;</button>
+            <button class="view-btn" data-view="table" title="Table view">&#9776;</button>
+        </div>
+    </div>
+
     <div class="service-grid" id="serviceGrid">
         <div class="loading">Loading cost data...</div>
+    </div>
+
+    <div class="service-table-wrapper" id="serviceTableWrapper" style="display:none">
+        <table class="service-table" id="serviceTable">
+            <thead>
+                <tr>
+                    <th data-sort="service">Service <span class="sort-icon"></span></th>
+                    <th data-sort="resource">Resource <span class="sort-icon"></span></th>
+                    <th data-sort="cost">Cost <span class="sort-icon"></span></th>
+                    <th data-sort="records">Records <span class="sort-icon"></span></th>
+                </tr>
+            </thead>
+            <tbody id="serviceTableBody"></tbody>
+        </table>
     </div>
 
     <div id="dataSource" class="data-source"></div>

@@ -3,3 +3,4 @@ api/local.settings.json
 package-lock.json
 api/package-lock.json
 query-cosmos.js
+upload-cosmos.js

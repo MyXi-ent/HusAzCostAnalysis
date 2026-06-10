@@ -37,6 +37,8 @@ const ICON_MAP = {
 let dailyChart = null;
 let currentData = null;
 let currentGranularity = 'day';
+let currentView = 'cards';
+let currentSort = { key: 'cost', dir: 'desc' };
 
 function getIconPath(serviceName) {
     const slug = ICON_MAP[serviceName];
@@ -139,6 +141,59 @@ function renderChart(dailyTotals) {
     });
 }
 
+function filterServices(serviceBreakdown, query) {
+    if (!query) return serviceBreakdown;
+    const q = query.toLowerCase();
+    return serviceBreakdown.filter(svc =>
+        svc.service.toLowerCase().includes(q) ||
+        (svc.resources || []).some(r => r.name.toLowerCase().includes(q))
+    );
+}
+
+function renderTable(serviceBreakdown) {
+    const wrapper = document.getElementById('serviceTableWrapper');
+    const tbody = document.getElementById('serviceTableBody');
+
+    // Flatten to rows: one row per resource
+    let rows = [];
+    for (const svc of serviceBreakdown) {
+        if (svc.resources && svc.resources.length > 0) {
+            for (const r of svc.resources) {
+                rows.push({ service: svc.service, resource: r.name, cost: r.cost, records: r.records });
+            }
+        } else {
+            rows.push({ service: svc.service, resource: '—', cost: svc.cost, records: svc.records });
+        }
+    }
+
+    // Sort
+    rows.sort((a, b) => {
+        const key = currentSort.key;
+        const dir = currentSort.dir === 'asc' ? 1 : -1;
+        if (key === 'cost' || key === 'records') return (a[key] - b[key]) * dir;
+        return a[key].localeCompare(b[key]) * dir;
+    });
+
+    tbody.innerHTML = rows.map(r => `
+        <tr>
+            <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${r.service}</td>
+            <td>${r.resource}</td>
+            <td>${formatCost(r.cost)}</td>
+            <td>${r.records}</td>
+        </tr>
+    `).join('');
+
+    // Update sort indicators
+    document.querySelectorAll('.service-table th').forEach(th => {
+        const icon = th.querySelector('.sort-icon');
+        if (th.dataset.sort === currentSort.key) {
+            icon.textContent = currentSort.dir === 'asc' ? ' ▲' : ' ▼';
+        } else {
+            icon.textContent = '';
+        }
+    });
+}
+
 function renderServices(serviceBreakdown) {
     const grid = document.getElementById('serviceGrid');
     const maxCost = serviceBreakdown[0]?.cost || 1;
@@ -170,11 +225,26 @@ function renderServices(serviceBreakdown) {
     }).join('');
 }
 
+function refreshView() {
+    if (!currentData) return;
+    const query = document.getElementById('serviceSearch').value;
+    const filtered = filterServices(currentData.serviceBreakdown, query);
+    if (currentView === 'cards') {
+        document.getElementById('serviceGrid').style.display = '';
+        document.getElementById('serviceTableWrapper').style.display = 'none';
+        renderServices(filtered);
+    } else {
+        document.getElementById('serviceGrid').style.display = 'none';
+        document.getElementById('serviceTableWrapper').style.display = '';
+        renderTable(filtered);
+    }
+}
+
 function renderData(data, source) {
     currentData = data;
     document.querySelector('.total-value').textContent = formatCost(data.totalCost);
     renderChart(data.dailyTotals);
-    renderServices(data.serviceBreakdown);
+    refreshView();
 
     const srcEl = document.getElementById('dataSource');
     if (source === 'upload') {
@@ -272,6 +342,32 @@ document.getElementById('applyDates').addEventListener('click', () => {
     const start = document.getElementById('startDate').value;
     const end = document.getElementById('endDate').value;
     if (start && end) loadData(start, end);
+});
+
+// View toggle
+document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentView = btn.dataset.view;
+        refreshView();
+    });
+});
+
+// Search
+document.getElementById('serviceSearch').addEventListener('input', () => refreshView());
+
+// Table sort
+document.querySelectorAll('.service-table th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        if (currentSort.key === key) {
+            currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort = { key, dir: key === 'cost' || key === 'records' ? 'desc' : 'asc' };
+        }
+        refreshView();
+    });
 });
 
 document.getElementById('uploadBtn').addEventListener('click', () => {
