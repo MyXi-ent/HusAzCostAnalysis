@@ -1,57 +1,12 @@
-const https = require('https');
-const crypto = require('crypto');
+const { CosmosClient } = require('@azure/cosmos');
 
-const host = 'husazcomoserverless.documents.azure.com';
+const endpoint = process.env.COSMOS_ENDPOINT || 'https://husazcomoserverless.documents.azure.com:443/';
 const key = process.env.COSMOS_KEY;
 const dbId = 'HusAzConsumption';
 const collId = 'HusAzConsumptionCosmoDB';
 
-function generateAuth(verb, resourceType, resourceLink, date) {
-  const text = `${verb}\n${resourceType}\n${resourceLink}\n${date.toLowerCase()}\n\n`;
-  const sig = crypto.createHmac('sha256', Buffer.from(key, 'base64')).update(text).digest('base64');
-  return encodeURIComponent(`type=master&ver=1.0&sig=${sig}`);
-}
-
-function cosmosQuery(sql, parameters) {
-  return new Promise((resolve, reject) => {
-    const date = new Date().toUTCString();
-    const resourceLink = `dbs/${dbId}/colls/${collId}`;
-    const token = generateAuth('post', 'docs', resourceLink, date);
-    const body = JSON.stringify(parameters ? { query: sql, parameters } : { query: sql });
-
-    const opts = {
-      hostname: host,
-      port: 443,
-      path: `/${resourceLink}/docs`,
-      method: 'POST',
-      headers: {
-        'Authorization': token,
-        'x-ms-date': date,
-        'x-ms-version': '2020-07-15',
-        'Content-Type': 'application/query+json',
-        'x-ms-documentdb-isquery': 'True',
-        'x-ms-documentdb-query-enablecrosspartition': 'True',
-        'x-ms-max-item-count': '-1',
-        'Content-Length': Buffer.byteLength(body)
-      }
-    };
-
-    const req = https.request(opts, res => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.code) reject(new Error(parsed.message));
-          else resolve(parsed.Documents || []);
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
-}
+const client = new CosmosClient({ endpoint, key });
+const container = client.database(dbId).container(collId);
 
 module.exports = async function (context, req) {
   const startDate = req.query.startDate || req.body?.startDate;
@@ -63,10 +18,15 @@ module.exports = async function (context, req) {
   }
 
   try {
-    // Fetch all records in range (Cosmos REST API handles cross-partition with the header)
-    const docs = await cosmosQuery(
-      `SELECT c.Date, c.ServiceName, c.Cost FROM c WHERE c.Date >= '${startDate}T00:00:00' AND c.Date <= '${endDate}T00:00:00'`
-    );
+    const query = {
+      query: "SELECT c.Date, c.ServiceName, c.Cost FROM c WHERE c.Date >= @start AND c.Date <= @end",
+      parameters: [
+        { name: "@start", value: `${startDate}T00:00:00` },
+        { name: "@end", value: `${endDate}T00:00:00` }
+      ]
+    };
+
+    const { resources: docs } = await container.items.query(query).fetchAll();
 
     // Aggregate daily totals
     const dailyMap = {};
@@ -95,6 +55,7 @@ module.exports = async function (context, req) {
       body: { dateRange: { startDate, endDate }, dailyTotals, serviceBreakdown, totalCost }
     };
   } catch (err) {
+    context.log.error('getCosts error:', err.message);
     context.res = { status: 500, body: { error: err.message } };
   }
 };
