@@ -510,19 +510,23 @@ async function processUploadedJSON(rawData) {
             const pct = Math.round(((i + batch.length) / total) * 100);
             showToast(`Uploading... ${i + batch.length}/${total} (${pct}%)`, 'info', true);
 
+            console.log(`[Upload] Sending batch ${Math.floor(i/BATCH_SIZE)+1} (${batch.length} docs)`, batch[0]);
             const res = await fetch('/api/upsertCosts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(batch)
             });
             const text = await res.text();
+            console.log(`[Upload] Response status: ${res.status}, body:`, text.substring(0, 500));
             let result;
-            try { result = JSON.parse(text); } catch (e) { throw new Error(text || `HTTP ${res.status}`); }
+            try { result = JSON.parse(text); } catch (e) { throw new Error(text.substring(0, 300) || `HTTP ${res.status}`); }
 
             if (res.ok || res.status === 207) {
                 succeeded += result.succeeded || 0;
                 failed += result.failed || 0;
+                if (result.errors?.length) console.warn('[Upload] Batch errors:', result.errors);
             } else {
+                console.error('[Upload] Batch failed:', result);
                 throw new Error(result.error || `Batch failed with HTTP ${res.status}`);
             }
         }

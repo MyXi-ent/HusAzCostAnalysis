@@ -58,19 +58,33 @@ async function upsertDoc(doc) {
 }
 
 module.exports = async function (context, req) {
-  context.log('upsertCosts invoked');
+  context.log('upsertCosts invoked, body type:', typeof req.body, 'isArray:', Array.isArray(req.body));
+
+  if (!req.body) {
+    context.log.error('Request body is null/undefined');
+    context.res = { status: 400, headers: { 'Content-Type': 'application/json' }, body: { error: 'Request body is empty' } };
+    return;
+  }
 
   const docs = req.body;
-  if (!Array.isArray(docs) || docs.length === 0) {
-    context.res = { status: 400, body: { error: 'Request body must be a non-empty array of cost documents' } };
+  if (!Array.isArray(docs)) {
+    context.log.error('Body is not an array, keys:', Object.keys(docs || {}).slice(0, 5));
+    context.res = { status: 400, headers: { 'Content-Type': 'application/json' }, body: { error: `Request body must be an array, got ${typeof docs}` } };
+    return;
+  }
+
+  if (docs.length === 0) {
+    context.res = { status: 400, headers: { 'Content-Type': 'application/json' }, body: { error: 'Array is empty' } };
     return;
   }
 
   // Limit batch size to prevent timeouts (5 min function timeout)
   if (docs.length > 5000) {
-    context.res = { status: 400, body: { error: `Too many documents (${docs.length}). Max 5000 per batch.` } };
+    context.res = { status: 400, headers: { 'Content-Type': 'application/json' }, body: { error: `Too many documents (${docs.length}). Max 5000 per batch.` } };
     return;
   }
+
+  context.log(`Processing ${docs.length} documents. First doc keys:`, Object.keys(docs[0] || {}));
 
   let succeeded = 0;
   let failed = 0;
@@ -94,7 +108,7 @@ module.exports = async function (context, req) {
 
       if (!doc.Date) {
         failed++;
-        errors.push('Document missing Date field');
+        if (errors.length < 10) errors.push(`Doc missing Date field, keys: ${Object.keys(raw).join(',')}`);
         continue;
       }
 
@@ -103,15 +117,18 @@ module.exports = async function (context, req) {
         succeeded++;
       } else {
         failed++;
-        if (errors.length < 5) errors.push(`${res.status}: ${res.body?.message || JSON.stringify(res.body).substring(0, 100)}`);
+        const errMsg = `Cosmos ${res.status}: ${typeof res.body === 'object' ? (res.body.message || JSON.stringify(res.body).substring(0, 200)) : String(res.body).substring(0, 200)}`;
+        context.log.error(errMsg);
+        if (errors.length < 10) errors.push(errMsg);
       }
     } catch (err) {
       failed++;
-      if (errors.length < 5) errors.push(err.message);
+      context.log.error('Upsert exception:', err.message, err.stack?.substring(0, 200));
+      if (errors.length < 10) errors.push(err.message);
     }
   }
 
-  context.log(`Upsert complete: ${succeeded} succeeded, ${failed} failed`);
+  context.log(`Upsert complete: ${succeeded} succeeded, ${failed} failed, errors: ${JSON.stringify(errors)}`);
   const status = failed === 0 ? 200 : (succeeded > 0 ? 207 : 500);
   context.res = {
     status,
