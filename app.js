@@ -501,7 +501,7 @@ async function processUploadedJSON(rawData) {
     // Upsert to Cosmos DB via API in batches
     const BATCH_SIZE = 500;
     const total = docs.length;
-    let succeeded = 0, failed = 0;
+    let succeeded = 0, failed = 0, newRecords = 0;
     showToast(`Uploading ${total} documents to Cosmos DB...`, 'info', true);
 
     try {
@@ -524,6 +524,7 @@ async function processUploadedJSON(rawData) {
             if (res.ok || res.status === 207) {
                 succeeded += result.succeeded || 0;
                 failed += result.failed || 0;
+                newRecords += result.newRecords || 0;
                 if (result.errors?.length) console.warn('[Upload] Batch errors:', result.errors);
             } else {
                 console.error('[Upload] Batch failed:', result);
@@ -531,9 +532,10 @@ async function processUploadedJSON(rawData) {
             }
         }
 
+        const newMsg = newRecords > 0 ? ` (${newRecords} new)` : ' (0 new — all existed)';
         const msg = failed > 0
-            ? `Saved ${succeeded}/${total} documents (${failed} failed)`
-            : `Successfully saved ${succeeded} documents to Cosmos DB`;
+            ? `Saved ${succeeded}/${total} documents (${failed} failed)${newMsg}`
+            : `Successfully saved ${succeeded} documents${newMsg}`;
         showToast(msg, failed > 0 ? 'warning' : 'success');
     } catch (err) {
         const partial = succeeded > 0 ? ` (${succeeded} saved before error)` : '';

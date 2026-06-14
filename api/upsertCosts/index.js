@@ -57,6 +57,29 @@ async function upsertDoc(doc) {
   return res;
 }
 
+async function getDocCount() {
+  const date = new Date().toUTCString();
+  const resourceLink = `dbs/${dbId}/colls/${collId}`;
+  const token = generateAuth('post', 'docs', resourceLink, date);
+  const body = JSON.stringify({ query: 'SELECT VALUE COUNT(1) FROM c' });
+  const res = await httpRequest({
+    hostname: host, port: 443, method: 'POST',
+    path: `/${resourceLink}/docs`,
+    headers: {
+      'Authorization': token,
+      'x-ms-date': date,
+      'x-ms-version': '2020-07-15',
+      'Content-Type': 'application/query+json',
+      'x-ms-documentdb-isquery': 'True',
+      'x-ms-documentdb-query-enablecrosspartition': 'True',
+      'x-ms-max-item-count': '1',
+      'Content-Length': Buffer.byteLength(body)
+    }
+  }, body);
+  const docs = res.body?.Documents || [];
+  return docs[0] || 0;
+}
+
 module.exports = async function (context, req) {
   context.log('upsertCosts invoked, body type:', typeof req.body, 'isArray:', Array.isArray(req.body));
 
@@ -85,6 +108,9 @@ module.exports = async function (context, req) {
   }
 
   context.log(`Processing ${docs.length} documents. First doc keys:`, Object.keys(docs[0] || {}));
+
+  const countBefore = await getDocCount();
+  context.log(`Document count before upsert: ${countBefore}`);
 
   let succeeded = 0;
   let failed = 0;
@@ -133,11 +159,13 @@ module.exports = async function (context, req) {
     }
   }
 
-  context.log(`Upsert complete: ${succeeded} succeeded, ${failed} failed, errors: ${JSON.stringify(errors)}`);
+  const countAfter = await getDocCount();
+  const newRecords = countAfter - countBefore;
+  context.log(`Upsert complete: ${succeeded} succeeded, ${failed} failed, new records: ${newRecords}, errors: ${JSON.stringify(errors)}`);
   const status = failed === 0 ? 200 : (succeeded > 0 ? 207 : 500);
   context.res = {
     status,
     headers: { 'Content-Type': 'application/json' },
-    body: { succeeded, failed, total: docs.length, errors }
+    body: { succeeded, failed, total: docs.length, newRecords, errors }
   };
 };
