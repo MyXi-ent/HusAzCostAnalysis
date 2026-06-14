@@ -464,14 +464,14 @@ async function loadData(startDate, endDate) {
     }
 }
 
-function showToast(message, type) {
+function showToast(message, type, persistent) {
     const existing = document.querySelector('.toast-notification');
     if (existing) existing.remove();
     const toast = document.createElement('div');
     toast.className = `toast-notification toast-${type}`;
     toast.textContent = message;
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 6000);
+    if (!persistent) setTimeout(() => toast.remove(), 6000);
 }
 
 async function processUploadedJSON(rawData) {
@@ -480,14 +480,16 @@ async function processUploadedJSON(rawData) {
     if (!docs.length) { alert('No data found in JSON file'); return; }
 
     // Upsert to Cosmos DB via API
-    showToast(`Uploading ${docs.length} documents to Cosmos DB...`, 'info');
+    showToast(`Uploading ${docs.length} documents to Cosmos DB...`, 'info', true);
     try {
         const res = await fetch('/api/upsertCosts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(docs)
         });
-        const result = await res.json();
+        let result;
+        const text = await res.text();
+        try { result = JSON.parse(text); } catch (e) { throw new Error(text || `HTTP ${res.status}`); }
         if (res.ok || res.status === 207) {
             const msg = result.failed > 0
                 ? `Saved ${result.succeeded}/${result.total} documents (${result.failed} failed)`
