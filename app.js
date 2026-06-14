@@ -71,6 +71,18 @@ function getPortalUrl(serviceName) {
     return path ? `https://portal.azure.com/${path}` : null;
 }
 
+// ServiceName → Resource Group mapping (best-effort based on Azure resource inventory)
+const SERVICE_TO_RG = {
+    'Azure Cosmos DB': 'HusAzRGMoHajjCareAI',
+    'Web PubSub': 'HusAzRGMoHajjCareAI',
+    'Service Bus': 'HusAzRGMoHajjCareAI',
+    // Everything else defaults to Hus_WABA_GPT
+};
+
+function getResourceGroup(serviceName) {
+    return SERVICE_TO_RG[serviceName] || 'Hus_WABA_GPT';
+}
+
 let dailyChart = null;
 let currentData = null;
 let currentGranularity = 'day';
@@ -348,6 +360,54 @@ function renderTable(serviceBreakdown) {
     });
 }
 
+function renderResourceGroups(serviceBreakdown) {
+    const grid = document.getElementById('rgGrid');
+    // Group services by resource group
+    const rgMap = {};
+    for (const svc of serviceBreakdown) {
+        const rg = getResourceGroup(svc.service);
+        if (!rgMap[rg]) rgMap[rg] = { cost: 0, services: [] };
+        rgMap[rg].cost += svc.cost;
+        rgMap[rg].services.push(svc);
+    }
+    const rgList = Object.entries(rgMap)
+        .map(([name, v]) => ({ name, cost: v.cost, services: v.services }))
+        .sort((a, b) => b.cost - a.cost);
+    const maxCost = rgList[0]?.cost || 1;
+
+    grid.innerHTML = rgList.map(rg => {
+        const servicesHtml = rg.services
+            .sort((a, b) => b.cost - a.cost)
+            .map(svc => `
+            <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="">
+                <span class="resource-name">
+                    <img src="${getIconPath(svc.service)}" class="rg-svc-icon" onerror="this.src='icons/azure-monitor.svg'">
+                    ${svc.service}
+                </span>
+                <span class="resource-cost">${formatCost(svc.cost)}</span>
+            </div>`).join('');
+        const portalUrl = `https://portal.azure.com/#@71a46d06-d6c8-4e81-8fe9-d2d6355392df/resource/subscriptions/75920ee3-5dda-44fd-89ea-619c3265442e/resourceGroups/${encodeURIComponent(rg.name)}/overview`;
+        return `
+        <div class="service-card rg-card">
+            <div class="service-info">
+                <a class="service-name service-link rg-name" href="${portalUrl}" target="_blank" title="Open RG in Azure Portal">${rg.name}</a>
+                <div class="service-cost">${formatCost(rg.cost)}</div>
+                <div class="service-meta">${rg.services.length} services</div>
+                <div class="service-bar">
+                    <div class="service-bar-fill" style="width: ${(rg.cost / maxCost * 100).toFixed(1)}%"></div>
+                </div>
+                <div class="resource-list">${servicesHtml}</div>
+            </div>
+        </div>`;
+    }).join('');
+
+    grid.querySelectorAll('.resource-clickable').forEach(row => {
+        row.addEventListener('click', () => {
+            setResourceFilter(row.dataset.service, null);
+        });
+    });
+}
+
 function renderServices(serviceBreakdown) {
     const grid = document.getElementById('serviceGrid');
     const maxCost = serviceBreakdown[0]?.cost || 1;
@@ -358,7 +418,8 @@ function renderServices(serviceBreakdown) {
         const hasMore = resources.length > 10;
         const resourcesHtml = top10.map(r => {
             const mapped = getResourceName(svc.service, r.name);
-            const badge = mapped ? buildResourceBadge(mapped) : '';
+            const badge = mapped ? buildResourceBadge(mapped)
+                : r.resourceName ? `<span class="resource-badge" title="${r.resourceName}">${r.resourceName}</span>` : '';
             return `
             <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
                 <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
@@ -372,7 +433,8 @@ function renderServices(serviceBreakdown) {
             <div class="resource-overflow" id="overflow-${idx}" style="display:none">
                 ${resources.slice(10).map(r => {
                     const mapped = getResourceName(svc.service, r.name);
-                    const badge = mapped ? buildResourceBadge(mapped) : '';
+                    const badge = mapped ? buildResourceBadge(mapped)
+                        : r.resourceName ? `<span class="resource-badge" title="${r.resourceName}">${r.resourceName}</span>` : '';
                     return `
                     <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
                         <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
@@ -383,10 +445,10 @@ function renderServices(serviceBreakdown) {
         ` : '';
 
         const portalUrl = getPortalUrl(svc.service);
-        const nameHtml = portalUrl
-            ? `<a class="service-name service-link" href="${portalUrl}" target="_blank" title="Open in Azure Portal">${svc.service}</a>
-               <span class="service-filter-btn" data-service="${svc.service}" title="Filter by ${svc.service}">&#9660;</span>`
-            : `<div class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${svc.service}</div>`;
+        const extLink = portalUrl
+            ? `<a class="service-external-link" href="${portalUrl}" target="_blank" title="Open in Azure Portal">&#8599;</a>`
+            : '';
+        const nameHtml = `<span class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${svc.service}</span>${extLink}`;
 
         return `
         <div class="service-card">
@@ -427,10 +489,6 @@ function renderServices(serviceBreakdown) {
     grid.querySelectorAll('.service-name-clickable').forEach(el => {
         el.addEventListener('click', () => setResourceFilter(el.dataset.service, null));
     });
-
-    grid.querySelectorAll('.service-filter-btn').forEach(el => {
-        el.addEventListener('click', () => setResourceFilter(el.dataset.service, null));
-    });
 }
 
 function refreshView() {
@@ -438,14 +496,19 @@ function refreshView() {
     const query = document.getElementById('serviceSearch').value;
     let filtered = applyResourceFilter(currentData.serviceBreakdown);
     filtered = filterServices(filtered, query);
+    document.getElementById('serviceGrid').style.display = 'none';
+    document.getElementById('serviceTableWrapper').style.display = 'none';
+    document.getElementById('rgGrid').style.display = 'none';
     if (currentView === 'cards') {
         document.getElementById('serviceGrid').style.display = '';
-        document.getElementById('serviceTableWrapper').style.display = 'none';
         renderServices(filtered);
-    } else {
-        document.getElementById('serviceGrid').style.display = 'none';
+    } else if (currentView === 'table') {
         document.getElementById('serviceTableWrapper').style.display = '';
         renderTable(filtered);
+    } else if (currentView === 'rg') {
+        document.getElementById('rgGrid').style.display = '';
+        renderResourceGroups(filtered);
+    }
     }
 }
 

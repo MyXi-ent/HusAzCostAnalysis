@@ -216,6 +216,15 @@ h1 {
 }
 .service-name-clickable { cursor: pointer; }
 .service-name-clickable:hover { color: #4fc3f7; }
+.service-external-link {
+    color: #666;
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-left: 6px;
+    vertical-align: middle;
+    transition: color 0.2s;
+}
+.service-external-link:hover { color: #4fc3f7; }
 .service-filter-btn { cursor: pointer; font-size: 0.65rem; color: #666; margin-left: 6px; vertical-align: middle; }
 .service-filter-btn:hover { color: #4fc3f7; }
 .service-link {
@@ -459,3 +468,15 @@ h1 {
 .toast-info::before { content: ''; display: inline-block; width: 14px; height: 14px; border: 2px solid #bbdefb; border-top-color: transparent; border-radius: 50%; margin-right: 10px; animation: spin 0.8s linear infinite; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* Resource Group view */
+.rg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+    padding: 0 32px 32px;
+}
+.rg-card { flex-direction: column; align-items: stretch; }
+.rg-card .service-info { width: 100%; }
+.rg-name { font-size: 1.1rem; font-weight: 600; }
+.rg-svc-icon { width: 18px; height: 18px; vertical-align: middle; margin-right: 6px; }

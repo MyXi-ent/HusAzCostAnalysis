@@ -103,6 +103,7 @@ module.exports = async function (context, req) {
     for (const d of docs) {
       const date = d.Date.split('T')[0];
       const res = d.ServiceResource || 'Other';
+      const resourceName = d.ResourceName || '';
       const matchesFilter = (!filterService || d.ServiceName === filterService) &&
                             (!filterResource || res === filterResource);
 
@@ -115,9 +116,12 @@ module.exports = async function (context, req) {
       if (!serviceMap[d.ServiceName]) serviceMap[d.ServiceName] = { cost: 0, records: 0, resources: {} };
       serviceMap[d.ServiceName].cost += d.Cost;
       serviceMap[d.ServiceName].records++;
-      if (!serviceMap[d.ServiceName].resources[res]) serviceMap[d.ServiceName].resources[res] = { cost: 0, records: 0 };
+      if (!serviceMap[d.ServiceName].resources[res]) serviceMap[d.ServiceName].resources[res] = { cost: 0, records: 0, resourceName: '' };
       serviceMap[d.ServiceName].resources[res].cost += d.Cost;
       serviceMap[d.ServiceName].resources[res].records++;
+      if (resourceName && !serviceMap[d.ServiceName].resources[res].resourceName) {
+        serviceMap[d.ServiceName].resources[res].resourceName = resourceName;
+      }
     }
 
     const dailyTotals = Object.entries(dailyMap)
@@ -130,7 +134,7 @@ module.exports = async function (context, req) {
         cost: Math.round(v.cost * 100) / 100,
         records: v.records,
         resources: Object.entries(v.resources)
-          .map(([name, r]) => ({ name, cost: Math.round(r.cost * 100) / 100, records: r.records }))
+          .map(([name, r]) => ({ name, cost: Math.round(r.cost * 100) / 100, records: r.records, resourceName: r.resourceName || '' }))
           .sort((a, b) => b.cost - a.cost)
       }))
       .sort((a, b) => b.cost - a.cost);
