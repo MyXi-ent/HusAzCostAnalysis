@@ -464,12 +464,43 @@ async function loadData(startDate, endDate) {
     }
 }
 
-function processUploadedJSON(rawData) {
+function showToast(message, type) {
+    const existing = document.querySelector('.toast-notification');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 6000);
+}
+
+async function processUploadedJSON(rawData) {
     // Expect array of objects with same schema as Cosmos docs
     let docs = Array.isArray(rawData) ? rawData : rawData.Documents || rawData.documents || [];
     if (!docs.length) { alert('No data found in JSON file'); return; }
 
-    // Normalize field names (handle both camelCase and PascalCase)
+    // Upsert to Cosmos DB via API
+    showToast(`Uploading ${docs.length} documents to Cosmos DB...`, 'info');
+    try {
+        const res = await fetch('/api/upsertCosts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(docs)
+        });
+        const result = await res.json();
+        if (res.ok || res.status === 207) {
+            const msg = result.failed > 0
+                ? `Saved ${result.succeeded}/${result.total} documents (${result.failed} failed)`
+                : `Successfully saved ${result.succeeded} documents to Cosmos DB`;
+            showToast(msg, result.failed > 0 ? 'warning' : 'success');
+        } else {
+            showToast(`Upload failed: ${result.error || 'Unknown error'}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Upload failed: ${err.message}`, 'error');
+    }
+
+    // Normalize and render locally
     docs = docs.map(d => ({
         Date: d.Date || d.date,
         ServiceName: d.ServiceName || d.serviceName,
@@ -477,7 +508,6 @@ function processUploadedJSON(rawData) {
         Quantity: d.Quantity ?? d.quantity ?? 0
     }));
 
-    // Aggregate daily totals
     const dailyMap = {};
     const serviceMap = {};
     docs.forEach(d => {

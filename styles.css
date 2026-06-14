@@ -434,3 +434,21 @@ h1 {
 }
 
 .data-source.uploaded { color: #4caf50; }
+
+.toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 14px 24px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    z-index: 9999;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.toast-success { background: #1b5e20; color: #a5d6a7; border: 1px solid #388e3c; }
+.toast-error { background: #b71c1c; color: #ffcdd2; border: 1px solid #ef5350; }
+.toast-warning { background: #e65100; color: #ffe0b2; border: 1px solid #ff9800; }
+.toast-info { background: #0d47a1; color: #bbdefb; border: 1px solid #42a5f5; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
