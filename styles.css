@@ -213,6 +213,10 @@ h1 {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.service-name-clickable { cursor: pointer; }
+.service-name-clickable:hover { color: #4fc3f7; }
+.service-filter-btn { cursor: pointer; font-size: 0.65rem; color: #666; margin-left: 6px; vertical-align: middle; }
+.service-filter-btn:hover { color: #4fc3f7; }
 .service-link {
     color: #4fc3f7;
     text-decoration: none;

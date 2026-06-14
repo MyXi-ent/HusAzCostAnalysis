@@ -138,7 +138,8 @@ function getDateRange(days) {
 async function fetchCostData(startDate, endDate, filter) {
     let url = `/api/getCosts?startDate=${startDate}&endDate=${endDate}`;
     if (filter) {
-        url += `&service=${encodeURIComponent(filter.service)}&resource=${encodeURIComponent(filter.resource)}`;
+        url += `&service=${encodeURIComponent(filter.service)}`;
+        if (filter.resource) url += `&resource=${encodeURIComponent(filter.resource)}`;
     }
     const resp = await fetch(url);
     if (!resp.ok) {
@@ -241,9 +242,9 @@ function renderChart(dailyTotals) {
 }
 
 function setResourceFilter(service, resource) {
-    currentResourceFilter = { service, resource };
+    currentResourceFilter = { service, resource: resource || null };
     document.getElementById('resourceFilterBanner').style.display = 'flex';
-    document.getElementById('resourceFilterText').textContent = `${service} → ${resource}`;
+    document.getElementById('resourceFilterText').textContent = resource ? `${service} → ${resource}` : service;
     if (currentDateRange.startDate) {
         loadData(currentDateRange.startDate, currentDateRange.endDate);
     }
@@ -260,6 +261,9 @@ function clearResourceFilter() {
 function applyResourceFilter(serviceBreakdown) {
     if (!currentResourceFilter) return serviceBreakdown;
     const { service, resource } = currentResourceFilter;
+    if (!resource) {
+        return serviceBreakdown.filter(svc => svc.service === service);
+    }
     return serviceBreakdown
         .filter(svc => svc.service === service)
         .map(svc => ({
@@ -309,7 +313,7 @@ function renderTable(serviceBreakdown) {
         const svcHtml = portalUrl
             ? `<a class="service-link" href="${portalUrl}" target="_blank">${r.service}</a>`
             : r.service;
-        const clickable = r.resource !== '—' ? 'class="resource-clickable-row"' : '';
+        const clickable = r.resource !== '—' ? 'class="resource-clickable-row"' : 'class="service-clickable-row"';
         return `
         <tr ${clickable} data-service="${r.service}" data-resource="${r.resource}">
             <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${svcHtml}</td>
@@ -324,6 +328,12 @@ function renderTable(serviceBreakdown) {
         row.addEventListener('click', (e) => {
             if (e.target.closest('a')) return;
             setResourceFilter(row.dataset.service, row.dataset.resource);
+        });
+    });
+    wrapper.querySelectorAll('.service-clickable-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('a')) return;
+            setResourceFilter(row.dataset.service, null);
         });
     });
 
@@ -374,8 +384,9 @@ function renderServices(serviceBreakdown) {
 
         const portalUrl = getPortalUrl(svc.service);
         const nameHtml = portalUrl
-            ? `<a class="service-name service-link" href="${portalUrl}" target="_blank" title="Open in Azure Portal">${svc.service}</a>`
-            : `<div class="service-name" title="${svc.service}">${svc.service}</div>`;
+            ? `<a class="service-name service-link" href="${portalUrl}" target="_blank" title="Open in Azure Portal">${svc.service}</a>
+               <span class="service-filter-btn" data-service="${svc.service}" title="Filter by ${svc.service}">&#9660;</span>`
+            : `<div class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${svc.service}</div>`;
 
         return `
         <div class="service-card">
@@ -408,9 +419,17 @@ function renderServices(serviceBreakdown) {
 
     grid.querySelectorAll('.resource-clickable').forEach(row => {
         row.addEventListener('click', (e) => {
-            if (e.target.closest('.resource-badge-link')) return; // don't hijack badge clicks
+            if (e.target.closest('.resource-badge-link')) return;
             setResourceFilter(row.dataset.service, row.dataset.resource);
         });
+    });
+
+    grid.querySelectorAll('.service-name-clickable').forEach(el => {
+        el.addEventListener('click', () => setResourceFilter(el.dataset.service, null));
+    });
+
+    grid.querySelectorAll('.service-filter-btn').forEach(el => {
+        el.addEventListener('click', () => setResourceFilter(el.dataset.service, null));
     });
 }
 
