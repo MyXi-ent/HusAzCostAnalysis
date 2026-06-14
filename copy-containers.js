@@ -6,7 +6,8 @@ const crypto = require('crypto');
 const SRC = { host: 'husazcosmodb.documents.azure.com', key: process.env.SRC_KEY };
 const DST = { host: 'husazcomoserverless.documents.azure.com', key: process.env.DST_KEY };
 const DB = 'HusAzMoHajj6886WABADashDemoDB';
-const CONTAINERS = ['StressTestV13Threads', 'StressTestV14Threads', 'HusAzCosmoMoHajj6886OpenAiAssistStressTest'];
+const CONTAINERS = ['RunsAnalysis'];
+const CONCURRENCY = 20;
 
 function generateAuth(key, verb, resourceType, resourceLink, date) {
   const text = `${verb}\n${resourceType}\n${resourceLink}\n${date.toLowerCase()}\n\n`;
@@ -74,34 +75,38 @@ async function readAllDocs(account, container) {
 
 async function writeDoc(account, container, doc, pkPath) {
   const resourceLink = `dbs/${DB}/colls/${container}`;
-  const date = new Date().toUTCString();
-  const token = generateAuth(account.key, 'post', 'docs', resourceLink, date);
   const cleanDoc = { ...doc };
   delete cleanDoc._rid; delete cleanDoc._self; delete cleanDoc._etag; delete cleanDoc._attachments; delete cleanDoc._ts;
-  
-  // Extract partition key value from document
   const pkField = pkPath.replace('/', '');
   const pkValue = cleanDoc[pkField];
-  
-  const body = JSON.stringify(cleanDoc);
-  const headers = {
-    'Authorization': token,
-    'x-ms-date': date,
-    'x-ms-version': '2020-07-15',
-    'Content-Type': 'application/json',
-    'x-ms-documentdb-is-upsert': 'True',
-    'x-ms-documentdb-partitionkey': JSON.stringify([pkValue]),
-    'Content-Length': Buffer.byteLength(body)
-  };
-  const res = await httpRequest(account.host, { method: 'POST', path: `/${resourceLink}/docs`, headers }, body);
-  if (res.status !== 200 && res.status !== 201) {
+  const bodyStr = JSON.stringify(cleanDoc);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const date = new Date().toUTCString();
+    const token = generateAuth(account.key, 'post', 'docs', resourceLink, date);
+    const headers = {
+      'Authorization': token,
+      'x-ms-date': date,
+      'x-ms-version': '2020-07-15',
+      'Content-Type': 'application/json',
+      'x-ms-documentdb-is-upsert': 'True',
+      'x-ms-documentdb-partitionkey': JSON.stringify([pkValue]),
+      'Content-Length': Buffer.byteLength(bodyStr)
+    };
+    const res = await httpRequest(account.host, { method: 'POST', path: `/${resourceLink}/docs`, headers }, bodyStr);
+    if (res.status === 200 || res.status === 201) return res.status;
+    if (res.status === 429) {
+      const retryMs = parseInt(res.headers['x-ms-retry-after-ms'] || '1000');
+      await new Promise(r => setTimeout(r, retryMs));
+      continue;
+    }
     throw new Error(`Write failed ${res.status}: ${JSON.stringify(res.body).substring(0, 200)}`);
   }
-  return res.status;
+  throw new Error('Write failed after 5 retries (429)');
 }
 
 async function main() {
-  const pkPath = '/id'; // all 3 stress test containers use /id
+  const pkPath = '/id';
   for (const container of CONTAINERS) {
     console.log(`\n=== ${container} ===`);
     console.log('Reading from provisioned...');
@@ -113,17 +118,18 @@ async function main() {
       continue;
     }
 
-    console.log('Writing to serverless...');
+    console.log(`Writing to serverless (${CONCURRENCY} concurrent)...`);
     let ok = 0, fail = 0;
-    for (const doc of docs) {
-      try {
-        await writeDoc(DST, container, doc, pkPath);
-        ok++;
-        if (ok % 100 === 0) process.stdout.write(`  ${ok}/${docs.length}\r`);
-      } catch (e) {
-        fail++;
-        if (fail <= 3) console.error(`  Failed doc ${doc.id}: ${e.message}`);
+    for (let i = 0; i < docs.length; i += CONCURRENCY) {
+      const batch = docs.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(doc => writeDoc(DST, container, doc, pkPath))
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') ok++;
+        else { fail++; if (fail <= 3) console.error(`  Failed: ${r.reason.message}`); }
       }
+      if (ok % 500 < CONCURRENCY) process.stdout.write(`  ${ok}/${docs.length} (${fail} failed)\r`);
     }
     console.log(`\nDone: ${ok} succeeded, ${fail} failed (total: ${docs.length})`);
   }

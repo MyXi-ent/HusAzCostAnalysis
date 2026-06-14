@@ -49,7 +49,7 @@ async function upsertDoc(doc) {
       'x-ms-version': '2020-07-15',
       'Content-Type': 'application/json',
       'x-ms-documentdb-is-upsert': 'True',
-      'x-ms-documentdb-partitionkey': JSON.stringify([doc.Date]),
+      'x-ms-documentdb-partitionkey': JSON.stringify([doc.ServiceName]),
       'Content-Length': Buffer.byteLength(body)
     }
   }, body);
