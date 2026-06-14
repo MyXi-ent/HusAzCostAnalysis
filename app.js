@@ -532,10 +532,10 @@ async function processUploadedJSON(rawData) {
             }
         }
 
-        const newMsg = newRecords > 0 ? ` (${newRecords} new)` : ' (0 new — all existed)';
+        const newMsg = newRecords > 0 ? `${newRecords} new records added` : 'No new records — data already up to date';
         const msg = failed > 0
-            ? `Saved ${succeeded}/${total} documents (${failed} failed)${newMsg}`
-            : `Successfully saved ${succeeded} documents${newMsg}`;
+            ? `Uploaded ${succeeded}/${total} records (${failed} failed). ${newMsg}`
+            : `✓ Upload complete: ${succeeded} records processed. ${newMsg}`;
         showToast(msg, failed > 0 ? 'warning' : 'success');
     } catch (err) {
         const partial = succeeded > 0 ? ` (${succeeded} saved before error)` : '';
