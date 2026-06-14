@@ -292,7 +292,7 @@ function filterServices(serviceBreakdown, query) {
     const q = query.toLowerCase();
     return serviceBreakdown.filter(svc =>
         svc.service.toLowerCase().includes(q) ||
-        (svc.resources || []).some(r => r.name.toLowerCase().includes(q))
+        (svc.resources || []).some(r => r.name.toLowerCase().includes(q) || (r.resourceName && r.resourceName.toLowerCase().includes(q)))
     );
 }
 
