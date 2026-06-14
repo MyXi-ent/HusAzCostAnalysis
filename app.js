@@ -670,6 +670,18 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     } catch (e) { /* not logged in */ }
 })();
 
+// Load build info
+(async () => {
+    try {
+        const res = await fetch('/build-info.json');
+        if (!res.ok) return;
+        const info = await res.json();
+        const utc = new Date(info.buildTime);
+        const egyptTime = utc.toLocaleString('en-GB', { timeZone: 'Africa/Cairo', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        document.getElementById('buildInfo').innerHTML = `Build #${info.buildId}<br>${egyptTime} (Cairo)`;
+    } catch (e) { /* no build info */ }
+})();
+
 // Calculate sponsorship remaining days
 const _sponsorDaysEl = document.getElementById('sponsorDays');
 if (_sponsorDaysEl) {

@@ -42,6 +42,7 @@ h1 {
 .user-name { color: #90caf9; font-size: 0.85rem; }
 .sign-out-link { color: #f48fb1; font-size: 0.8rem; text-decoration: none; }
 .sign-out-link:hover { text-decoration: underline; }
+.build-info { font-size: 0.7rem; color: #666; margin-left: 12px; padding-left: 12px; border-left: 1px solid #2a3a5c; line-height: 1.4; }
 
 .btn {
     display: inline-flex;

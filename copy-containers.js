@@ -5,8 +5,11 @@ const crypto = require('crypto');
 
 const SRC = { host: 'husazcosmodb.documents.azure.com', key: process.env.SRC_KEY };
 const DST = { host: 'husazcomoserverless.documents.azure.com', key: process.env.DST_KEY };
-const DB = 'HusAzMoHajj6886WABADashDemoDB';
-const CONTAINERS = ['RunsAnalysis'];
+const JOBS = [
+  { db: 'HusAzMoHajj6886WABADashDemoDB', container: 'UnhealthyEndpoints', pk: '/type' },
+  { db: 'HusAzMoHajjWABAAstt', container: 'SttTranscriptionLogs', pk: '/userPhone' },
+  { db: 'MoHAJJKB', container: 'UploadedFiles', pk: '/language' }
+];
 const CONCURRENCY = 20;
 
 function generateAuth(key, verb, resourceType, resourceLink, date) {
@@ -31,9 +34,9 @@ function httpRequest(host, opts, body) {
   });
 }
 
-async function getPartitionKeyRanges(account, container) {
+async function getPartitionKeyRanges(account, db, container) {
   const date = new Date().toUTCString();
-  const resourceLink = `dbs/${DB}/colls/${container}`;
+  const resourceLink = `dbs/${db}/colls/${container}`;
   const token = generateAuth(account.key, 'get', 'pkranges', resourceLink, date);
   const res = await httpRequest(account.host, {
     method: 'GET',
@@ -43,9 +46,9 @@ async function getPartitionKeyRanges(account, container) {
   return res.body.PartitionKeyRanges || [];
 }
 
-async function readAllDocs(account, container) {
-  const ranges = await getPartitionKeyRanges(account, container);
-  const resourceLink = `dbs/${DB}/colls/${container}`;
+async function readAllDocs(account, db, container) {
+  const ranges = await getPartitionKeyRanges(account, db, container);
+  const resourceLink = `dbs/${db}/colls/${container}`;
   const docs = [];
   for (const range of ranges) {
     let continuation = null;
@@ -73,8 +76,8 @@ async function readAllDocs(account, container) {
   return docs;
 }
 
-async function writeDoc(account, container, doc, pkPath) {
-  const resourceLink = `dbs/${DB}/colls/${container}`;
+async function writeDoc(account, db, container, doc, pkPath) {
+  const resourceLink = `dbs/${db}/colls/${container}`;
   const cleanDoc = { ...doc };
   delete cleanDoc._rid; delete cleanDoc._self; delete cleanDoc._etag; delete cleanDoc._attachments; delete cleanDoc._ts;
   const pkField = pkPath.replace('/', '');
@@ -106,11 +109,10 @@ async function writeDoc(account, container, doc, pkPath) {
 }
 
 async function main() {
-  const pkPath = '/id';
-  for (const container of CONTAINERS) {
-    console.log(`\n=== ${container} ===`);
+  for (const { db, container, pk } of JOBS) {
+    console.log(`\n=== ${db}/${container} (pk=${pk}) ===`);
     console.log('Reading from provisioned...');
-    const docs = await readAllDocs(SRC, container);
+    const docs = await readAllDocs(SRC, db, container);
     console.log(`Found ${docs.length} documents`);
     
     if (docs.length === 0) {
@@ -123,7 +125,7 @@ async function main() {
     for (let i = 0; i < docs.length; i += CONCURRENCY) {
       const batch = docs.slice(i, i + CONCURRENCY);
       const results = await Promise.allSettled(
-        batch.map(doc => writeDoc(DST, container, doc, pkPath))
+        batch.map(doc => writeDoc(DST, db, container, doc, pk))
       );
       for (const r of results) {
         if (r.status === 'fulfilled') ok++;
