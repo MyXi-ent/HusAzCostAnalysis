@@ -479,27 +479,42 @@ async function processUploadedJSON(rawData) {
     let docs = Array.isArray(rawData) ? rawData : rawData.Documents || rawData.documents || [];
     if (!docs.length) { alert('No data found in JSON file'); return; }
 
-    // Upsert to Cosmos DB via API
-    showToast(`Uploading ${docs.length} documents to Cosmos DB...`, 'info', true);
+    // Upsert to Cosmos DB via API in batches
+    const BATCH_SIZE = 200;
+    const total = docs.length;
+    let succeeded = 0, failed = 0;
+    showToast(`Uploading ${total} documents to Cosmos DB...`, 'info', true);
+
     try {
-        const res = await fetch('/api/upsertCosts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(docs)
-        });
-        let result;
-        const text = await res.text();
-        try { result = JSON.parse(text); } catch (e) { throw new Error(text || `HTTP ${res.status}`); }
-        if (res.ok || res.status === 207) {
-            const msg = result.failed > 0
-                ? `Saved ${result.succeeded}/${result.total} documents (${result.failed} failed)`
-                : `Successfully saved ${result.succeeded} documents to Cosmos DB`;
-            showToast(msg, result.failed > 0 ? 'warning' : 'success');
-        } else {
-            showToast(`Upload failed: ${result.error || 'Unknown error'}`, 'error');
+        for (let i = 0; i < total; i += BATCH_SIZE) {
+            const batch = docs.slice(i, i + BATCH_SIZE);
+            const pct = Math.round(((i + batch.length) / total) * 100);
+            showToast(`Uploading... ${i + batch.length}/${total} (${pct}%)`, 'info', true);
+
+            const res = await fetch('/api/upsertCosts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(batch)
+            });
+            const text = await res.text();
+            let result;
+            try { result = JSON.parse(text); } catch (e) { throw new Error(text || `HTTP ${res.status}`); }
+
+            if (res.ok || res.status === 207) {
+                succeeded += result.succeeded || 0;
+                failed += result.failed || 0;
+            } else {
+                throw new Error(result.error || `Batch failed with HTTP ${res.status}`);
+            }
         }
+
+        const msg = failed > 0
+            ? `Saved ${succeeded}/${total} documents (${failed} failed)`
+            : `Successfully saved ${succeeded} documents to Cosmos DB`;
+        showToast(msg, failed > 0 ? 'warning' : 'success');
     } catch (err) {
-        showToast(`Upload failed: ${err.message}`, 'error');
+        const partial = succeeded > 0 ? ` (${succeeded} saved before error)` : '';
+        showToast(`Upload failed: ${err.message}${partial}`, 'error');
     }
 
     // Normalize and render locally
