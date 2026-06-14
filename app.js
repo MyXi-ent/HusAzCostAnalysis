@@ -677,7 +677,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
         if (!res.ok) return;
         const info = await res.json();
         const utc = new Date(info.buildTime);
-        const egyptTime = utc.toLocaleString('en-GB', { timeZone: 'Africa/Cairo', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const egyptTime = utc.toLocaleString('en-US', { timeZone: 'Africa/Cairo', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
         document.getElementById('buildInfo').innerHTML = `Build #${info.buildId}<br>${egyptTime} (Cairo)`;
     } catch (e) { /* no build info */ }
 })();
