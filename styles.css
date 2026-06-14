@@ -448,6 +448,14 @@ h1 {
     vertical-align: middle;
     margin-right: 8px;
 }
+.mapped-resource-cell {
+    color: #a5d6a7;
+    font-size: 0.75rem;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 .data-source {
     padding: 12px 32px 24px;

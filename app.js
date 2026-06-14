@@ -305,10 +305,10 @@ function renderTable(serviceBreakdown) {
     for (const svc of serviceBreakdown) {
         if (svc.resources && svc.resources.length > 0) {
             for (const r of svc.resources) {
-                rows.push({ service: svc.service, resource: r.name, cost: r.cost, records: r.records });
+                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records });
             }
         } else {
-            rows.push({ service: svc.service, resource: '—', cost: svc.cost, records: svc.records });
+            rows.push({ service: svc.service, resource: '—', resourceName: '', cost: svc.cost, records: svc.records });
         }
     }
 
@@ -330,6 +330,7 @@ function renderTable(serviceBreakdown) {
         <tr ${clickable} data-service="${r.service}" data-resource="${r.resource}">
             <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${svcHtml}</td>
             <td>${r.resource}</td>
+            <td class="mapped-resource-cell">${r.resourceName}</td>
             <td>${formatCost(r.cost)}</td>
             <td>${r.records}</td>
         </tr>`;
