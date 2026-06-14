@@ -499,7 +499,7 @@ async function processUploadedJSON(rawData) {
     if (!docs.length) { alert('No data found in JSON file'); return; }
 
     // Upsert to Cosmos DB via API in batches
-    const BATCH_SIZE = 200;
+    const BATCH_SIZE = 500;
     const total = docs.length;
     let succeeded = 0, failed = 0;
     showToast(`Uploading ${total} documents to Cosmos DB...`, 'info', true);

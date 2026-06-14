@@ -89,42 +89,47 @@ module.exports = async function (context, req) {
   let succeeded = 0;
   let failed = 0;
   const errors = [];
+  const CONCURRENCY = 20;
 
-  for (const raw of docs) {
-    try {
-      const doc = {
-        id: generateDocId(raw),
-        Date: raw.Date || raw.date,
-        SubscriptionName: raw.SubscriptionName || raw.subscriptionName || 'Xi_Sponsored_Subscription',
-        SubscriptionGuid: raw.SubscriptionGuid || raw.subscriptionGuid || '75920ee3-5dda-44fd-89ea-619c3265442e',
-        ResourceGuid: raw.ResourceGuid || raw.resourceGuid || '',
-        ServiceName: raw.ServiceName || raw.serviceName || '',
-        ServiceType: raw.ServiceType || raw.serviceType || '',
-        ServiceRegion: raw.ServiceRegion || raw.serviceRegion || '',
-        ServiceResource: raw.ServiceResource || raw.serviceResource || '',
-        Quantity: raw.Quantity ?? raw.quantity ?? 0,
-        Cost: raw.Cost ?? raw.cost ?? 0
-      };
+  function prepareDoc(raw) {
+    const doc = {
+      id: generateDocId(raw),
+      Date: raw.Date || raw.date,
+      SubscriptionName: raw.SubscriptionName || raw.subscriptionName || 'Xi_Sponsored_Subscription',
+      SubscriptionGuid: raw.SubscriptionGuid || raw.subscriptionGuid || '75920ee3-5dda-44fd-89ea-619c3265442e',
+      ResourceGuid: raw.ResourceGuid || raw.resourceGuid || '',
+      ServiceName: raw.ServiceName || raw.serviceName || '',
+      ServiceType: raw.ServiceType || raw.serviceType || '',
+      ServiceRegion: raw.ServiceRegion || raw.serviceRegion || '',
+      ServiceResource: raw.ServiceResource || raw.serviceResource || '',
+      Quantity: raw.Quantity ?? raw.quantity ?? 0,
+      Cost: raw.Cost ?? raw.cost ?? 0
+    };
+    return doc;
+  }
 
-      if (!doc.Date) {
-        failed++;
-        if (errors.length < 10) errors.push(`Doc missing Date field, keys: ${Object.keys(raw).join(',')}`);
-        continue;
-      }
+  // Process in parallel with concurrency limit
+  for (let i = 0; i < docs.length; i += CONCURRENCY) {
+    const chunk = docs.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(chunk.map(async (raw) => {
+      const doc = prepareDoc(raw);
+      if (!doc.Date) throw new Error('Missing Date field');
+      return upsertDoc(doc);
+    }));
 
-      const res = await upsertDoc(doc);
-      if (res.status >= 200 && res.status < 300) {
-        succeeded++;
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        if (r.value.status >= 200 && r.value.status < 300) {
+          succeeded++;
+        } else {
+          failed++;
+          const errMsg = `Cosmos ${r.value.status}: ${typeof r.value.body === 'object' ? (r.value.body.message || JSON.stringify(r.value.body).substring(0, 200)) : String(r.value.body).substring(0, 200)}`;
+          if (errors.length < 10) errors.push(errMsg);
+        }
       } else {
         failed++;
-        const errMsg = `Cosmos ${res.status}: ${typeof res.body === 'object' ? (res.body.message || JSON.stringify(res.body).substring(0, 200)) : String(res.body).substring(0, 200)}`;
-        context.log.error(errMsg);
-        if (errors.length < 10) errors.push(errMsg);
+        if (errors.length < 10) errors.push(r.reason?.message || 'Unknown error');
       }
-    } catch (err) {
-      failed++;
-      context.log.error('Upsert exception:', err.message, err.stack?.substring(0, 200));
-      if (errors.length < 10) errors.push(err.message);
     }
   }
 

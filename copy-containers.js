@@ -6,9 +6,7 @@ const crypto = require('crypto');
 const SRC = { host: 'husazcosmodb.documents.azure.com', key: process.env.SRC_KEY };
 const DST = { host: 'husazcomoserverless.documents.azure.com', key: process.env.DST_KEY };
 const JOBS = [
-  { db: 'HusAzMoHajj6886WABADashDemoDB', container: 'UnhealthyEndpoints', pk: '/type' },
-  { db: 'HusAzMoHajjWABAAstt', container: 'SttTranscriptionLogs', pk: '/userPhone' },
-  { db: 'MoHAJJKB', container: 'UploadedFiles', pk: '/language' }
+  { db: 'HusAzMoHajj6886WABADashDemoDB', container: 'EndpointConfig', pk: '/type' }
 ];
 const CONCURRENCY = 20;
 
