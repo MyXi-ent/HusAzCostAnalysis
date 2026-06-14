@@ -94,7 +94,7 @@ module.exports = async function (context, req) {
   context.log(`Querying Cosmos DB for range: ${startDate} to ${endDate}, filter: ${filterService}/${filterResource}`);
   try {
     const docs = await cosmosQuery(
-      "SELECT c.Date, c.ServiceName, c.ServiceResource, c.Cost FROM c WHERE c.Date >= @start AND c.Date <= @end",
+      "SELECT c.Date, c.ServiceName, c.ServiceResource, c.Cost, c.ResourceName FROM c WHERE c.Date >= @start AND c.Date <= @end",
       [{ name: "@start", value: `${startDate}T00:00:00` }, { name: "@end", value: `${endDate}T00:00:00` }]
     );
 

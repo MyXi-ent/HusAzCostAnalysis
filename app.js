@@ -509,7 +509,6 @@ function refreshView() {
         document.getElementById('rgGrid').style.display = '';
         renderResourceGroups(filtered);
     }
-    }
 }
 
 function renderData(data, source) {
