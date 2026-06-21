@@ -116,12 +116,12 @@ module.exports = async function (context, req) {
       if (!serviceMap[d.ServiceName]) serviceMap[d.ServiceName] = { cost: 0, records: 0, resources: {} };
       serviceMap[d.ServiceName].cost += d.Cost;
       serviceMap[d.ServiceName].records++;
-      if (!serviceMap[d.ServiceName].resources[res]) serviceMap[d.ServiceName].resources[res] = { cost: 0, records: 0, resourceName: '' };
-      serviceMap[d.ServiceName].resources[res].cost += d.Cost;
-      serviceMap[d.ServiceName].resources[res].records++;
-      if (resourceName && !serviceMap[d.ServiceName].resources[res].resourceName) {
-        serviceMap[d.ServiceName].resources[res].resourceName = resourceName;
-      }
+      // Group by ServiceResource + ResourceName so different resources show separately
+      const resKey = resourceName ? `${res}|${resourceName}` : res;
+      if (!serviceMap[d.ServiceName].resources[resKey]) serviceMap[d.ServiceName].resources[resKey] = { cost: 0, records: 0, resourceName: '', meter: res };
+      serviceMap[d.ServiceName].resources[resKey].cost += d.Cost;
+      serviceMap[d.ServiceName].resources[resKey].records++;
+      if (resourceName) serviceMap[d.ServiceName].resources[resKey].resourceName = resourceName;
     }
 
     const dailyTotals = Object.entries(dailyMap)
@@ -134,7 +134,7 @@ module.exports = async function (context, req) {
         cost: Math.round(v.cost * 100) / 100,
         records: v.records,
         resources: Object.entries(v.resources)
-          .map(([name, r]) => ({ name, cost: Math.round(r.cost * 100) / 100, records: r.records, resourceName: r.resourceName || '' }))
+          .map(([key, r]) => ({ name: r.meter || key, cost: Math.round(r.cost * 100) / 100, records: r.records, resourceName: r.resourceName || '' }))
           .sort((a, b) => b.cost - a.cost)
       }))
       .sort((a, b) => b.cost - a.cost);

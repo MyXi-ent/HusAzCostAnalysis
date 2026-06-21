@@ -29,8 +29,9 @@ function httpRequest(opts, body) {
 }
 
 function generateDocId(doc) {
-  // Deterministic ID from Date + ServiceName + ServiceResource to enable upsert
-  const key = `${doc.Date}|${doc.ServiceName || ''}|${doc.ServiceType || ''}|${doc.ServiceResource || ''}`;
+  // Deterministic ID from Date + ServiceName + ServiceResource + ResourceName to enable upsert
+  const resName = doc.ResourceName || doc.resourceName || '';
+  const key = `${doc.Date}|${doc.ServiceName || ''}|${doc.ServiceType || ''}|${doc.ServiceResource || ''}|${resName}`;
   return crypto.createHash('md5').update(key).digest('hex');
 }
 
@@ -128,6 +129,7 @@ module.exports = async function (context, req) {
       ServiceType: raw.ServiceType || raw.serviceType || '',
       ServiceRegion: raw.ServiceRegion || raw.serviceRegion || '',
       ServiceResource: raw.ServiceResource || raw.serviceResource || '',
+      ResourceName: raw.ResourceName || raw.resourceName || '',
       Quantity: raw.Quantity ?? raw.quantity ?? 0,
       Cost: raw.Cost ?? raw.cost ?? 0
     };
