@@ -411,6 +411,7 @@ function renderResourceGroups(serviceBreakdown) {
 
 function renderServices(serviceBreakdown) {
     const grid = document.getElementById('serviceGrid');
+    serviceBreakdown.sort((a, b) => b.cost - a.cost);
     const maxCost = serviceBreakdown[0]?.cost || 1;
 
     grid.innerHTML = serviceBreakdown.map((svc, idx) => {
