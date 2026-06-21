@@ -118,6 +118,12 @@ function getResourcePortalUrl(resourceId) {
 }
 
 function buildResourceBadge(mapped) {
+    if (!mapped || mapped.length === 0) return '';
+    if (mapped.length > 3) {
+        // Too many resources to show individually — show count with tooltip
+        const title = mapped.map(m => `${m.name}${m.type ? ' (' + m.type + ')' : ''}`).join('\n');
+        return `<span class="resource-badge" title="${title}">${mapped.length} resources</span>`;
+    }
     const r = mapped[0];
     const url = getResourcePortalUrl(r.id);
     const title = mapped.map(m => `${m.name}${m.type ? ' (' + m.type + ')' : ''}`).join(', ');

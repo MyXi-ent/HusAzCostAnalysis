@@ -88,6 +88,11 @@ module.exports = async function (context, req) {
       "Resources | where type == 'microsoft.web/sites' and kind contains 'functionapp' | project name, resourceGroup, location, id"
     );
 
+    // Query Web Apps (non-function)
+    const webApps = await queryResourceGraph(token,
+      "Resources | where type == 'microsoft.web/sites' and kind !contains 'functionapp' | project name, resourceGroup, location, id"
+    );
+
     // Query Cosmos DB accounts
     const cosmos = await queryResourceGraph(token,
       "Resources | where type == 'microsoft.documentdb/databaseaccounts' | project name, resourceGroup, location, id"
@@ -96,6 +101,36 @@ module.exports = async function (context, req) {
     // Query Communication Services
     const comms = await queryResourceGraph(token,
       "Resources | where type == 'microsoft.communication/communicationservices' | project name, resourceGroup, location, id"
+    );
+
+    // Query Storage Accounts
+    const storage = await queryResourceGraph(token,
+      "Resources | where type == 'microsoft.storage/storageaccounts' | project name, resourceGroup, location, sku=sku.name, id"
+    );
+
+    // Query Log Analytics Workspaces
+    const logAnalytics = await queryResourceGraph(token,
+      "Resources | where type == 'microsoft.operationalinsights/workspaces' | project name, resourceGroup, location, sku=sku.name, id"
+    );
+
+    // Query Logic Apps
+    const logicApps = await queryResourceGraph(token,
+      "Resources | where type == 'microsoft.logic/workflows' | project name, resourceGroup, location, id"
+    );
+
+    // Query Service Bus Namespaces
+    const serviceBus = await queryResourceGraph(token,
+      "Resources | where type == 'microsoft.servicebus/namespaces' | project name, resourceGroup, location, sku=sku.name, id"
+    );
+
+    // Query Event Hubs
+    const eventHubs = await queryResourceGraph(token,
+      "Resources | where type == 'microsoft.eventhub/namespaces' | project name, resourceGroup, location, sku=sku.name, id"
+    );
+
+    // Query CDN/Front Door profiles
+    const cdnProfiles = await queryResourceGraph(token,
+      "Resources | where type == 'microsoft.cdn/profiles' | project name, resourceGroup, location, sku=sku.name, id"
     );
 
     // Build SKU-to-resource mapping
@@ -136,11 +171,37 @@ module.exports = async function (context, req) {
         'P2v3': 'E2a v4/E2as v4',
         'P3v3': 'E4a v4/E4as v4',
         'EP1': 'D2a v4/D2as v4',
-        'EP2': 'D2a v4/D2as v4',
-        'EP3': 'D4a v4/D4as v4'
+        'EP2': 'D4a v4/D4as v4',
+        'EP3': 'D8a v4/D8as v4'
       };
       const vmSku = planVmMap[p.sku];
       if (vmSku) addToMap(vmSku, entry);
+    });
+
+    // Functions billing meters → EP/premium plans
+    const epPlans = plans.filter(p => p.sku && (p.sku.startsWith('EP') || p.sku.startsWith('P')));
+    epPlans.forEach(p => {
+      const entry = { name: `${p.name} (${p.sku})`, type: 'App Service Plan', resourceGroup: p.resourceGroup, id: p.id };
+      addToMap('Premium vCPU Duration', entry);
+      addToMap('Premium Memory Duration', entry);
+    });
+
+    // Bandwidth meters → resources with public endpoints
+    const bandwidthResources = [
+      ...vms.map(v => ({ name: v.name, type: 'VM', id: v.id })),
+      ...webApps.map(a => ({ name: a.name, type: 'Web App', id: a.id })),
+      ...cdnProfiles.map(c => ({ name: c.name, type: 'Front Door', id: c.id }))
+    ];
+    ['Intra Continent Data Transfer Out', 'Standard Data Transfer Out',
+     'Inter Continent Data Transfer Out - NAM or EU To Any',
+     'Standard Data Transfer In', 'Intra Continent Data Transfer In'
+    ].forEach(meter => { resourceMap[meter] = bandwidthResources; });
+
+    // Storage meters
+    storage.forEach(s => {
+      const entry = { name: s.name, type: 'Storage', resourceGroup: s.resourceGroup, id: s.id };
+      const skuShort = (s.sku || '').replace('Standard_', '');
+      addToMap(skuShort, entry);
     });
 
     // Flat resource list for lookup
@@ -154,13 +215,25 @@ module.exports = async function (context, req) {
       // Include named resources for service-level matching
       byService: {
         'Functions': functions.map(f => ({ name: f.name, id: f.id })),
+        'Azure App Service': [
+          ...plans.filter(p => !['FC1','Y1'].includes(p.sku)).map(p => ({ name: `${p.name} (${p.sku})`, id: p.id })),
+          ...webApps.map(a => ({ name: a.name, id: a.id }))
+        ],
         'Azure Cosmos DB': cosmos.map(c => ({ name: c.name, id: c.id })),
         'Messaging': comms.map(c => ({ name: c.name, id: c.id })),
-        'Phone Numbers': comms.map(c => ({ name: c.name, id: c.id }))
+        'Phone Numbers': comms.map(c => ({ name: c.name, id: c.id })),
+        'Bandwidth': bandwidthResources,
+        'Storage': storage.map(s => ({ name: s.name, id: s.id })),
+        'Log Analytics': logAnalytics.map(w => ({ name: w.name, id: w.id })),
+        'Logic Apps': logicApps.map(l => ({ name: l.name, id: l.id })),
+        'Service Bus': serviceBus.map(s => ({ name: `${s.name} (${s.sku})`, id: s.id })),
+        'Event Hubs': eventHubs.map(e => ({ name: `${e.name} (${e.sku})`, id: e.id })),
+        'Virtual Machines': vms.map(v => ({ name: v.name, id: v.id })),
+        'Azure Front Door Service': cdnProfiles.map(c => ({ name: c.name, id: c.id }))
       }
     };
 
-    context.log(`Found ${vms.length} VMs, ${plans.length} plans, ${functions.length} functions`);
+    context.log(`Found ${vms.length} VMs, ${plans.length} plans, ${functions.length} functions, ${storage.length} storage, ${logicApps.length} logic apps`);
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
