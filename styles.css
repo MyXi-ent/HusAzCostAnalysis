@@ -268,6 +268,25 @@ h1 {
     border-top: 1px solid #2a3a5c;
     padding-top: 6px;
 }
+.resource-list.collapsed .resource-list-body {
+    display: none;
+}
+.resource-toggle {
+    background: none;
+    border: none;
+    color: #4fc3f7;
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 2px 0;
+    opacity: 0.8;
+    transition: opacity 0.15s;
+}
+.resource-toggle:hover {
+    opacity: 1;
+}
+.resource-list:not(.collapsed) .resource-toggle {
+    margin-bottom: 4px;
+}
 .resource-row {
     display: flex;
     justify-content: space-between;

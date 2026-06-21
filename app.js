@@ -463,7 +463,7 @@ function renderServices(serviceBreakdown) {
                 <div class="service-bar">
                     <div class="service-bar-fill" style="width: ${(svc.cost / maxCost * 100).toFixed(1)}%"></div>
                 </div>
-                ${resourcesHtml ? `<div class="resource-list">${resourcesHtml}${moreHtml}</div>` : ''}
+                ${resourcesHtml ? `<div class="resource-list collapsed"><button class="resource-toggle" title="Expand details">&#9662; ${resources.length} meter${resources.length > 1 ? 's' : ''}</button><div class="resource-list-body">${resourcesHtml}${moreHtml}</div></div>` : ''}
             </div>
         </div>
     `;
@@ -489,6 +489,16 @@ function renderServices(serviceBreakdown) {
 
     grid.querySelectorAll('.service-name-clickable').forEach(el => {
         el.addEventListener('click', () => setResourceFilter(el.dataset.service, null));
+    });
+
+    grid.querySelectorAll('.resource-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const list = btn.closest('.resource-list');
+            list.classList.toggle('collapsed');
+            btn.innerHTML = list.classList.contains('collapsed')
+                ? `&#9662; ${btn.innerHTML.match(/\d+ meters?/)?.[0] || 'details'}`
+                : `&#9652; ${btn.innerHTML.match(/\d+ meters?/)?.[0] || 'details'}`;
+        });
     });
 }
 
