@@ -740,6 +740,32 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     e.target.value = '';
 });
 
+// Sync from Azure Cost API
+document.getElementById('syncBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('syncBtn');
+    btn.disabled = true;
+    btn.textContent = 'Syncing...';
+    try {
+        const days = 7; // fetch last 7 days by default
+        const res = await fetch('/api/syncCosts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ days })
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Sync failed');
+        showToast(`✓ Synced ${result.succeeded} records (${result.fetched} fetched, ${result.failed} failed)`, 'success');
+        // Reload current view
+        const { startDate: s, endDate: e2 } = currentDateRange;
+        if (s && e2) loadData(s, e2);
+    } catch (err) {
+        showToast(`Sync failed: ${err.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sync from Azure';
+    }
+});
+
 // Load user info
 (async () => {
     try {

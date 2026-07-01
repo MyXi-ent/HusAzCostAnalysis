@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Azure Bandwidth Cost Investigation Report</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 40px;
+      line-height: 1.6;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    h1 {
+      color: #fff;
+      font-size: 28px;
+      margin-bottom: 8px;
+      border-bottom: 2px solid #e94560;
+      padding-bottom: 12px;
+    }
+    .subtitle { color: #888; font-size: 14px; margin-bottom: 32px; }
+    h2 {
+      color: #e94560;
+      font-size: 20px;
+      margin: 32px 0 16px;
+      padding-left: 12px;
+      border-left: 3px solid #e94560;
+    }
+    h3 { color: #ccc; font-size: 16px; margin: 20px 0 10px; }
+    .card {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 24px;
+      margin: 16px 0;
+      border: 1px solid #2a2a4a;
+    }
+    .card.alert {
+      border-color: #e94560;
+      background: linear-gradient(135deg, #1a1a2e, #2d1525);
+    }
+    .card.success {
+      border-color: #4ecdc4;
+      background: linear-gradient(135deg, #1a1a2e, #152d2b);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .stat-box {
+      background: #0f3460;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-box .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .stat-box .value.red { color: #e94560; }
+    .stat-box .value.green { color: #4ecdc4; }
+    .stat-box .label { font-size: 12px; color: #888; margin-top: 4px; text-transform: uppercase; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+    th {
+      background: #0f3460;
+      color: #4ecdc4;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    tr:hover td { background: #1e2a4a; }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tag.critical { background: #e94560; color: #fff; }
+    .tag.fixed { background: #4ecdc4; color: #1a1a2e; }
+    .tag.warning { background: #f5a623; color: #1a1a2e; }
+    .timeline {
+      position: relative;
+      padding-left: 24px;
+      margin: 16px 0;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #2a2a4a;
+    }
+    .timeline-item {
+      position: relative;
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      background: #16213e;
+      border-radius: 6px;
+      border: 1px solid #2a2a4a;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -20px;
+      top: 16px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #e94560;
+    }
+    .timeline-item.fix::before { background: #4ecdc4; }
+    .timeline-date { color: #888; font-size: 12px; }
+    .timeline-text { color: #e0e0e0; margin-top: 4px; }
+    .bar-chart { margin: 16px 0; }
+    .bar-row {
+      display: flex;
+      align-items: center;
+      margin: 6px 0;
+    }
+    .bar-label { width: 80px; font-size: 12px; color: #888; }
+    .bar-track { flex: 1; height: 20px; background: #0f3460; border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+    .bar-fill.red { background: linear-gradient(90deg, #e94560, #ff6b6b); }
+    .bar-fill.green { background: linear-gradient(90deg, #4ecdc4, #6ee7de); }
+    .bar-value { width: 80px; text-align: right; font-size: 12px; color: #ccc; margin-left: 8px; }
+    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #2a2a4a; color: #666; font-size: 12px; text-align: center; }
+    code { background: #0f3460; padding: 2px 6px; border-radius: 3px; font-family: 'Cascadia Code', monospace; font-size: 13px; color: #4ecdc4; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Azure Bandwidth Cost Investigation</h1>
+    <p class="subtitle">Subscription: Xi_Sponsored_Subscription &bull; Generated: June 21, 2026 &bull; Investigator: Copilot + Mohamed Hussein</p>
+
+    <h2>Executive Summary</h2>
+    <div class="card alert">
+      <p><strong>Finding:</strong> A storage account in East US 2 was being aggressively queried by Function Apps in East US, generating <strong>37 TB of cross-region data transfer</strong> in 21 days at $0.02/GB — resulting in <strong>$748 in bandwidth charges</strong> for June alone.</p>
+      <p style="margin-top:12px"><strong>Status:</strong> <span class="tag fixed">FIXED</span> The Foothill team deployed a code fix on June 17, reducing daily egress from 2.5 TB to 30 GB (98.7% reduction).</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="value red">$748</div>
+        <div class="label">June MTD Bandwidth</div>
+      </div>
+      <div class="stat-box">
+        <div class="value red">37 TB</div>
+        <div class="label">Inter-Region Egress</div>
+      </div>
+      <div class="stat-box">
+        <div class="value">24M</div>
+        <div class="label">Table Queries (21 days)</div>
+      </div>
+      <div class="stat-box">
+        <div class="value green">98.7%</div>
+        <div class="label">Reduction After Fix</div>
+      </div>
+    </div>
+
+    <h2>Root Cause</h2>
+    <div class="card">
+      <table>
+        <tr><th>Factor</th><th>Detail</th></tr>
+        <tr><td>Storage Account</td><td><code>husazhajjsocstrtbllive</code> (East US 2)</td></tr>
+        <tr><td>Calling Service</td><td><code>HusAzFuncMoHajjDash6886WABAP1</code> (East US)</td></tr>
+        <tr><td>Problem</td><td>WhatsApp Social Inbox did full table scans on message log tables (~GB each) instead of indexed ticket reads</td></tr>
+        <tr><td>Charge Meter</td><td>Intra Continent Data Transfer Out — Inter-Region (North America)</td></tr>
+        <tr><td>Rate</td><td>$0.02 per GB</td></tr>
+      </table>
+    </div>
+
+    <h2>Daily Egress Pattern</h2>
+    <div class="card">
+      <div class="bar-chart">
+        <div class="bar-row"><span class="bar-label">Jun 1</span><div class="bar-track"><div class="bar-fill red" style="width:60%"></div></div><span class="bar-value">1,499 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 2</span><div class="bar-track"><div class="bar-fill red" style="width:84%"></div></div><span class="bar-value">2,115 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 3</span><div class="bar-track"><div class="bar-fill red" style="width:92%"></div></div><span class="bar-value">2,305 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 4</span><div class="bar-track"><div class="bar-fill red" style="width:72%"></div></div><span class="bar-value">1,817 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 5</span><div class="bar-track"><div class="bar-fill red" style="width:80%"></div></div><span class="bar-value">2,018 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 6</span><div class="bar-track"><div class="bar-fill red" style="width:100%"></div></div><span class="bar-value">2,516 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 7</span><div class="bar-track"><div class="bar-fill red" style="width:89%"></div></div><span class="bar-value">2,240 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 8</span><div class="bar-track"><div class="bar-fill red" style="width:90%"></div></div><span class="bar-value">2,265 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 9</span><div class="bar-track"><div class="bar-fill red" style="width:67%"></div></div><span class="bar-value">1,687 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 10</span><div class="bar-track"><div class="bar-fill red" style="width:67%"></div></div><span class="bar-value">1,694 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 11</span><div class="bar-track"><div class="bar-fill red" style="width:67%"></div></div><span class="bar-value">1,675 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 12</span><div class="bar-track"><div class="bar-fill red" style="width:75%"></div></div><span class="bar-value">1,892 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 13</span><div class="bar-track"><div class="bar-fill red" style="width:80%"></div></div><span class="bar-value">2,024 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 14</span><div class="bar-track"><div class="bar-fill red" style="width:83%"></div></div><span class="bar-value">2,082 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 15</span><div class="bar-track"><div class="bar-fill red" style="width:78%"></div></div><span class="bar-value">1,965 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 16</span><div class="bar-track"><div class="bar-fill red" style="width:59%"></div></div><span class="bar-value">1,494 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 17</span><div class="bar-track"><div class="bar-fill green" style="width:5%"></div></div><span class="bar-value">129 GB ✓</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 18</span><div class="bar-track"><div class="bar-fill green" style="width:4%"></div></div><span class="bar-value">104 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 19</span><div class="bar-track"><div class="bar-fill green" style="width:1.3%"></div></div><span class="bar-value">32 GB</span></div>
+        <div class="bar-row"><span class="bar-label">Jun 20</span><div class="bar-track"><div class="bar-fill green" style="width:1.1%"></div></div><span class="bar-value">27 GB</span></div>
+      </div>
+    </div>
+
+    <h2>Timeline of Events</h2>
+    <div class="card">
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-date">June 1, 2026</div>
+          <div class="timeline-text">Cross-region egress begins at ~1.5-2.5 TB/day. WhatsApp Social Inbox reads use full table scans on <code>MoHajj7900WABAMsgsFullLogsAzureProduction</code></div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">June 6, 2026</div>
+          <div class="timeline-text">Peak day: 2,516 GB egress ($50.33 in a single day)</div>
+        </div>
+        <div class="timeline-item fix">
+          <div class="timeline-date">June 17, 2026 — 12:26 UTC</div>
+          <div class="timeline-text"><strong>Fix deployed to production</strong><br>
+            PR #279 by <strong>Mohammad Milhem</strong> — switched WhatsApp reads from full message log scans to indexed Social Inbox Tickets/Threads<br>
+            PR #354 by <strong>Osama Rahimi</strong> — WhatsApp backup safety fix<br>
+            Both merged by <strong>B. Dweikat</strong></div>
+        </div>
+        <div class="timeline-item fix">
+          <div class="timeline-date">June 18-20, 2026</div>
+          <div class="timeline-text">Egress stabilized at 27-104 GB/day — normal operational levels</div>
+        </div>
+      </div>
+    </div>
+
+    <h2>Cost Breakdown</h2>
+    <div class="card">
+      <table>
+        <tr><th>Meter</th><th>Volume (GB)</th><th>Cost</th><th>% of Total</th></tr>
+        <tr><td>Intra Continent Inter-Region Out (North America)</td><td>37,116</td><td>$742.32</td><td>99.2%</td></tr>
+        <tr><td>Standard Data Transfer Out (Internet)</td><td>68.5</td><td>$5.96</td><td>0.8%</td></tr>
+        <tr><td>Inter Continent Out (NAM/EU to Any)</td><td>0.7</td><td>$0.03</td><td>&lt;0.1%</td></tr>
+        <tr style="font-weight:700"><td>Total</td><td>37,185</td><td>$748.32</td><td>100%</td></tr>
+      </table>
+    </div>
+
+    <h2>Month Comparison</h2>
+    <div class="card">
+      <table>
+        <tr><th>Month</th><th>Bandwidth Cost</th><th>Status</th></tr>
+        <tr><td>May 2026</td><td>$341</td><td><span class="tag warning">High</span></td></tr>
+        <tr><td>June 2026 (MTD, 21 days)</td><td>$748</td><td><span class="tag critical">Critical</span></td></tr>
+        <tr><td>June projected (post-fix rest of month)</td><td>~$760 total</td><td><span class="tag fixed">Fixed mid-month</span></td></tr>
+        <tr><td>July 2026 (projected)</td><td>~$18-25</td><td><span class="tag fixed">Normal</span></td></tr>
+      </table>
+    </div>
+
+    <h2>Architecture Issue</h2>
+    <div class="card">
+      <h3>Cross-Region Topology (the underlying problem)</h3>
+      <table>
+        <tr><th>Resource</th><th>Region</th><th>Role</th></tr>
+        <tr><td><code>HusAzFuncMoHajjDash6886WABAP1</code></td><td>East US</td><td>Function App (EP1) — all API logic</td></tr>
+        <tr><td><code>husazhajjsocstrtbllive</code></td><td>East US 2</td><td>Table Storage — session logs, social inbox, message logs</td></tr>
+        <tr><td><code>HusAzADXMoHajjWABA</code></td><td>East US</td><td>Azure Data Explorer</td></tr>
+        <tr><td><code>HusAzMoHajjWABADashDemo</code></td><td>East US 2</td><td>Static Web App (frontend)</td></tr>
+      </table>
+      <p style="margin-top:12px;color:#f5a623">⚠ The storage account and Function App are in different regions. Any inefficient query will always incur $0.02/GB cross-region charges.</p>
+    </div>
+
+    <h2>Recommendations</h2>
+    <div class="card success">
+      <table>
+        <tr><th>#</th><th>Action</th><th>Impact</th><th>Effort</th></tr>
+        <tr><td>1</td><td>Migrate <code>husazhajjsocstrtbllive</code> to East US</td><td>Eliminates all inter-region charges permanently</td><td>Medium (data copy + connection string update)</td></tr>
+        <tr><td>2</td><td>Add Azure Monitor alert for Storage Egress &gt; 200 GB/day</td><td>Early warning for future regressions</td><td>Low</td></tr>
+        <tr><td>3</td><td>Code review policy: require partition key filters on all table queries</td><td>Prevents full table scans</td><td>Low</td></tr>
+      </table>
+    </div>
+
+    <div class="footer">
+      Xi Sponsored Subscription (75920ee3-5dda-44fd-89ea-619c3265442e) &bull; Resource Group: HusAzRGMoHajjCareAI &bull; Report generated by GitHub Copilot
+    </div>
+  </div>
+</body>
+</html>
