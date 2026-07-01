@@ -1,0 +1,29 @@
+name: Daily Cost Sync
+
+on:
+  schedule:
+    # Run at 03:00 UTC daily (06:00 KSA)
+    - cron: "0 3 * * *"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger cost sync (last 2 days)
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://delightful-sea-0fa91060f.7.azurestaticapps.net/api/syncCosts" \
+            -H "Content-Type: application/json" \
+            -d '{"days": 2}')
+          
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -ne 200 ]; then
+            echo "::error::Sync failed with status $http_code"
+            exit 1
+          fi
