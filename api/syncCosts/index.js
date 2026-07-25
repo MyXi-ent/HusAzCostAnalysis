@@ -142,18 +142,12 @@ async function fetchCostData(token, startDate, endDate) {
     const isFullUrl = nextLink.startsWith("https://");
     const hostname = isFullUrl ? new URL(nextLink).hostname : "management.azure.com";
     const path = isFullUrl ? nextLink.replace(`https://${hostname}`, "") : nextLink;
-    const isPost = !isFullUrl; // first request is POST, nextLink pages are GET
 
-    let res;
-    if (isPost) {
-      res = await httpPost(hostname, path, body, {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(body),
-      });
-    } else {
-      res = await httpGet(hostname, path, { Authorization: `Bearer ${token}` });
-    }
+    let res = await httpPost(hostname, path, body, {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body),
+    });
 
     if (res.status === 429) {
       await new Promise((r) => setTimeout(r, 30000));
