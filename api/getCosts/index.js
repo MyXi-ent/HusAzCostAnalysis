@@ -101,6 +101,7 @@ module.exports = async function (context, req) {
     const dailyMap = {};
     const serviceMap = {};
     const serviceDaily = {};   // ServiceName -> { date -> cost }  (for anomaly detection)
+    const resourceDaily = {};  // "ServiceName\0resKey" -> { date -> cost }
     const allDates = new Set();
     for (const d of docs) {
       const date = d.Date.split('T')[0];
@@ -128,6 +129,11 @@ module.exports = async function (context, req) {
       serviceMap[d.ServiceName].resources[resKey].cost += d.Cost;
       serviceMap[d.ServiceName].resources[resKey].records++;
       if (resourceName) serviceMap[d.ServiceName].resources[resKey].resourceName = resourceName;
+
+      // Per-meter daily series, for row-level anomaly detection in the table view
+      const meterKey = `${d.ServiceName}\u0000${resKey}`;
+      if (!resourceDaily[meterKey]) resourceDaily[meterKey] = {};
+      resourceDaily[meterKey][date] = (resourceDaily[meterKey][date] || 0) + d.Cost;
     }
 
     const dailyTotals = Object.entries(dailyMap)
@@ -140,7 +146,7 @@ module.exports = async function (context, req) {
         cost: Math.round(v.cost * 100) / 100,
         records: v.records,
         resources: Object.entries(v.resources)
-          .map(([key, r]) => ({ name: r.meter || key, cost: Math.round(r.cost * 100) / 100, records: r.records, resourceName: r.resourceName || '' }))
+          .map(([key, r]) => ({ name: r.meter || key, cost: Math.round(r.cost * 100) / 100, records: r.records, resourceName: r.resourceName || '', _key: key }))
           .sort((a, b) => b.cost - a.cost)
       }))
       .sort((a, b) => b.cost - a.cost);
@@ -151,36 +157,46 @@ module.exports = async function (context, req) {
     const usableDates = sortedDates.length > 1 ? sortedDates.slice(0, -1) : sortedDates;
     const recentDates = usableDates.slice(-7);
     const priorDates = usableDates.slice(0, -7);
+    const hasTrendWindow = recentDates.length >= 3 && priorDates.length >= 3;
 
-    if (recentDates.length >= 3 && priorDates.length >= 3) {
+    // minDelta is the dollar-per-day impact below which a change is treated as noise.
+    // Meters are individually smaller than whole services, so they use a lower bar.
+    function computeTrend(daily, minDelta) {
+      const recentAvg = recentDates.reduce((s, dt) => s + (daily[dt] || 0), 0) / recentDates.length;
+      const priorAvg = priorDates.reduce((s, dt) => s + (daily[dt] || 0), 0) / priorDates.length;
+      const delta = recentAvg - priorAvg;
+      // Treat a near-zero baseline with real recent spend as brand new, not a huge percentage
+      const isNew = priorAvg < 0.01 && recentAvg >= 0.01;
+      const pct = isNew ? null : (priorAvg > 0 ? (delta / priorAvg) * 100 : 0);
+
+      let severity = null;
+      if (Math.abs(delta) >= minDelta) {
+        const magnitude = isNew ? Infinity : Math.abs(pct);
+        if (magnitude >= 100) severity = 'high';
+        else if (magnitude >= 50) severity = 'medium';
+      }
+
+      return {
+        priorAvg: Math.round(priorAvg * 100) / 100,
+        recentAvg: Math.round(recentAvg * 100) / 100,
+        delta: Math.round(delta * 100) / 100,
+        pct: pct === null ? null : Math.round(pct),
+        isNew,
+        severity,
+        direction: delta >= 0 ? 'up' : 'down'
+      };
+    }
+
+    if (hasTrendWindow) {
       for (const svc of serviceBreakdown) {
-        const daily = serviceDaily[svc.service] || {};
-        const recentAvg = recentDates.reduce((s, dt) => s + (daily[dt] || 0), 0) / recentDates.length;
-        const priorAvg = priorDates.reduce((s, dt) => s + (daily[dt] || 0), 0) / priorDates.length;
-        const delta = recentAvg - priorAvg;
-        // Percent change; treat a near-zero baseline with real recent spend as "new"
-        const isNew = priorAvg < 0.01 && recentAvg >= 0.01;
-        const pct = isNew ? null : (priorAvg > 0 ? (delta / priorAvg) * 100 : 0);
-
-        // Only flag when the dollar impact is meaningful, to suppress noise
-        let severity = null;
-        if (Math.abs(delta) >= 1) {
-          const magnitude = isNew ? Infinity : Math.abs(pct);
-          if (magnitude >= 100) severity = 'high';
-          else if (magnitude >= 50) severity = 'medium';
+        svc.trend = computeTrend(serviceDaily[svc.service] || {}, 1);
+        for (const r of svc.resources) {
+          r.trend = computeTrend(resourceDaily[`${svc.service}\u0000${r._key}`] || {}, 0.5);
         }
-
-        svc.trend = {
-          priorAvg: Math.round(priorAvg * 100) / 100,
-          recentAvg: Math.round(recentAvg * 100) / 100,
-          delta: Math.round(delta * 100) / 100,
-          pct: pct === null ? null : Math.round(pct),
-          isNew,
-          severity,
-          direction: delta >= 0 ? 'up' : 'down'
-        };
       }
     }
+    // _key was only needed to look up the per-meter series
+    for (const svc of serviceBreakdown) for (const r of svc.resources) delete r._key;
 
     // totalCost reflects the filtered view (dailyTotals sum)
     const totalCost = Math.round(dailyTotals.reduce((s, d) => s + d.cost, 0) * 100) / 100;

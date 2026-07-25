@@ -256,6 +256,8 @@ h1 {
     background: rgba(102, 187, 106, 0.13);
     border-color: rgba(102, 187, 106, 0.45);
 }
+.trend-cell { white-space: nowrap; }
+.trend-cell .anomaly-badge { margin-left: 0; }
 .service-filter-btn { cursor: pointer; font-size: 0.65rem; color: #666; margin-left: 6px; vertical-align: middle; }
 .service-filter-btn:hover { color: #4fc3f7; }
 .service-link {

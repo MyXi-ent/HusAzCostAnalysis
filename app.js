@@ -361,10 +361,10 @@ function renderTable(serviceBreakdown) {
     for (const svc of serviceBreakdown) {
         if (svc.resources && svc.resources.length > 0) {
             for (const r of svc.resources) {
-                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records });
+                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records, trend: r.trend || null });
             }
         } else {
-            rows.push({ service: svc.service, resource: '—', resourceName: '', cost: svc.cost, records: svc.records });
+            rows.push({ service: svc.service, resource: '—', resourceName: '', cost: svc.cost, records: svc.records, trend: svc.trend || null });
         }
     }
 
@@ -373,6 +373,8 @@ function renderTable(serviceBreakdown) {
         const key = currentSort.key;
         const dir = currentSort.dir === 'asc' ? 1 : -1;
         if (key === 'cost' || key === 'records') return (a[key] - b[key]) * dir;
+        // Sort by dollar-per-day change, so the biggest movers surface first
+        if (key === 'trend') return ((a.trend?.delta ?? 0) - (b.trend?.delta ?? 0)) * dir;
         return a[key].localeCompare(b[key]) * dir;
     });
 
@@ -388,6 +390,7 @@ function renderTable(serviceBreakdown) {
             <td>${r.resource}</td>
             <td class="mapped-resource-cell">${r.resourceName}</td>
             <td>${formatCost(r.cost)}</td>
+            <td class="trend-cell">${buildAnomalyBadge(r.trend)}</td>
             <td>${r.records}</td>
         </tr>`;
     }).join('');
