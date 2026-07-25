@@ -92,6 +92,65 @@ let resourceData = null;
 let currentResourceFilter = null; // { service, resource }
 let currentDateRange = { startDate: null, endDate: null };
 
+// GitHub Marketplace billing customer ID → GitHub username mapping
+const GITHUB_CUSTOMER_MAP = {
+    'customer-35461937': { username: 'mhusseinxi', displayName: 'Mohamed Hussein' },
+    'customer-37672319': { username: 'rayan-xi', displayName: 'Rayan' }
+};
+
+function renderGitHubUsersPanel(serviceBreakdown) {
+    const panel = document.getElementById('githubUsersPanel');
+    const grid = document.getElementById('githubUsersGrid');
+    const githubService = serviceBreakdown.find(s => s.service === 'GitHub');
+    if (!githubService || !githubService.resources || githubService.resources.length === 0) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    // Group resources by customer ID
+    const userCosts = {};
+    for (const res of githubService.resources) {
+        const custId = res.resourceName || '';
+        const mapped = GITHUB_CUSTOMER_MAP[custId];
+        const key = custId || 'unknown';
+        if (!userCosts[key]) {
+            userCosts[key] = {
+                username: mapped ? mapped.username : custId || 'Unknown',
+                displayName: mapped ? mapped.displayName : custId || 'Unknown',
+                totalCost: 0,
+                meters: []
+            };
+        }
+        userCosts[key].totalCost += res.cost;
+        userCosts[key].meters.push({ name: res.name, cost: res.cost });
+    }
+
+    const users = Object.values(userCosts).sort((a, b) => b.totalCost - a.totalCost);
+    const maxCost = users[0]?.totalCost || 1;
+
+    grid.innerHTML = users.map(user => {
+        const metersHtml = user.meters
+            .sort((a, b) => b.cost - a.cost)
+            .map(m => `<div class="gh-meter-row"><span class="gh-meter-name">${m.name}</span><span class="gh-meter-cost">${formatCost(m.cost)}</span></div>`)
+            .join('');
+        const pct = (user.totalCost / maxCost * 100).toFixed(1);
+        const avatarUrl = `https://github.com/${user.username}.png?size=48`;
+        return `
+        <div class="gh-user-card">
+            <img class="gh-avatar" src="${avatarUrl}" alt="${user.username}" onerror="this.src='icons/azure-monitor.svg'">
+            <div class="gh-user-info">
+                <div class="gh-user-name">${user.displayName}</div>
+                <div class="gh-user-handle">@${user.username}</div>
+                <div class="gh-user-cost">${formatCost(user.totalCost)}</div>
+                <div class="gh-user-bar"><div class="gh-user-bar-fill" style="width:${pct}%"></div></div>
+                <div class="gh-meters">${metersHtml}</div>
+            </div>
+        </div>`;
+    }).join('');
+
+    panel.style.display = '';
+}
+
 async function loadResourceMap() {
     try {
         const res = await fetch('/api/getResources');
@@ -537,6 +596,7 @@ function renderData(data, source) {
         document.getElementById('dateRangeValue').textContent = `${fmt(data.dateRange.startDate)} — ${fmt(data.dateRange.endDate)}`;
     }
     renderChart(data.dailyTotals);
+    renderGitHubUsersPanel(data.serviceBreakdown);
     refreshView();
 
     const srcEl = document.getElementById('dataSource');
@@ -738,32 +798,6 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     };
     reader.readAsText(file);
     e.target.value = '';
-});
-
-// Sync from Azure Cost API
-document.getElementById('syncBtn').addEventListener('click', async () => {
-    const btn = document.getElementById('syncBtn');
-    btn.disabled = true;
-    btn.textContent = 'Syncing...';
-    try {
-        const days = 7; // fetch last 7 days by default
-        const res = await fetch('/api/syncCosts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ days })
-        });
-        const result = await res.json();
-        if (!res.ok) throw new Error(result.error || 'Sync failed');
-        showToast(`✓ Synced ${result.succeeded} records (${result.fetched} fetched, ${result.failed} failed)`, 'success');
-        // Reload current view
-        const { startDate: s, endDate: e2 } = currentDateRange;
-        if (s && e2) loadData(s, e2);
-    } catch (err) {
-        showToast(`Sync failed: ${err.message}`, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Sync from Azure';
-    }
 });
 
 // Load user info
