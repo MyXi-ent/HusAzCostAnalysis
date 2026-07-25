@@ -9,6 +9,12 @@
  *   ARM_TENANT_ID, ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_SUBSCRIPTION_ID
  *   COSMOS_KEY (for Cosmos upsert)
  *
+ * Optional: ARM_SUBSCRIPTIONS — JSON array to sync more than one subscription:
+ *   [{"name":"Xi_Sponsored_2","id":"<guid>"},
+ *    {"name":"Xi_Sponsored_Subscription_NEW","id":"<guid>","cred":"XI"}]
+ *   `cred` selects an alternate credential set (ARM_XI_TENANT_ID, ARM_XI_CLIENT_ID,
+ *   ARM_XI_CLIENT_SECRET), needed when a subscription lives in a different tenant.
+ *
  * Call: POST /api/syncCosts  body: { "days": 5 }  (optional, default 2)
  *
  * Field mapping (Cost Management Query API → Cosmos):
@@ -19,17 +25,45 @@
  *   Row[4] (MeterSubcategory)  → ServiceType
  *   Row[5] (Meter)             → ServiceResource
  *   Row[6] (ResourceId)        → ResourceName (last path segment)
- *   "Xi_Sponsored_Subscription"→ SubscriptionName
- *   subscriptionId             → SubscriptionGuid
+ *   subscription name          → SubscriptionName
+ *   subscription id            → SubscriptionGuid
  */
 const https = require("https");
 const crypto = require("crypto");
 
 // ─── Azure ARM Auth ───────────────────────────────────────────────────────────
-const tenantId = process.env.ARM_TENANT_ID;
-const clientId = process.env.ARM_CLIENT_ID;
-const clientSecret = process.env.ARM_CLIENT_SECRET;
-const subscriptionId = process.env.ARM_SUBSCRIPTION_ID;
+// Credentials default to the ARM_* vars. A subscription may name an alternate
+// credential set via `cred`, resolving to ARM_<CRED>_TENANT_ID / _CLIENT_ID /
+// _CLIENT_SECRET. This is mandatory for subscriptions in another tenant: a
+// single-tenant app registration cannot issue a token for a tenant it is not in.
+function resolveCredentials(cred) {
+  const prefix = cred ? `ARM_${String(cred).toUpperCase()}_` : "ARM_";
+  return {
+    tenantId: process.env[`${prefix}TENANT_ID`] || process.env.ARM_TENANT_ID,
+    clientId: process.env[`${prefix}CLIENT_ID`] || process.env.ARM_CLIENT_ID,
+    clientSecret: process.env[`${prefix}CLIENT_SECRET`] || process.env.ARM_CLIENT_SECRET,
+  };
+}
+
+function resolveSubscriptions() {
+  const raw = process.env.ARM_SUBSCRIPTIONS;
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error("ARM_SUBSCRIPTIONS must be a non-empty JSON array");
+    }
+    for (const s of parsed) {
+      if (!s.id || !s.name) throw new Error("each ARM_SUBSCRIPTIONS entry needs both id and name");
+    }
+    return parsed;
+  }
+  if (!process.env.ARM_SUBSCRIPTION_ID) return [];
+  return [{ name: "Xi_Sponsored_Subscription", id: process.env.ARM_SUBSCRIPTION_ID }];
+}
+
+// Documents for this subscription keep the original id formula, so the existing
+// Cosmos records are updated in place instead of being duplicated alongside new ones.
+const LEGACY_ID_SUBSCRIPTION = "75920ee3-5dda-44fd-89ea-619c3265442e";
 
 // ─── Cosmos DB ────────────────────────────────────────────────────────────────
 const cosmosHost = "husazcomoserverless.documents.azure.com";
@@ -71,7 +105,11 @@ function httpGet(hostname, path, headers) {
   });
 }
 
-async function getArmToken() {
+async function getArmToken(cred) {
+  const { tenantId, clientId, clientSecret } = resolveCredentials(cred);
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error(`Missing credentials for cred=${cred || "default"}`);
+  }
   const body = `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&scope=https%3A%2F%2Fmanagement.azure.com%2F.default`;
   const result = await httpPost(
     "login.microsoftonline.com",
@@ -93,7 +131,11 @@ function generateCosmosAuth(verb, resourceType, resourceLink, date) {
 }
 
 function generateDocId(doc) {
-  const key = `${doc.Date}|${doc.ServiceName || ""}|${doc.ServiceType || ""}|${doc.ServiceResource || ""}|${doc.ResourceName || ""}`;
+  // Meter identity is only unique within a subscription, so anything other than the
+  // original subscription is namespaced by its guid to avoid cross-subscription
+  // records overwriting each other.
+  const scope = doc.SubscriptionGuid === LEGACY_ID_SUBSCRIPTION ? "" : `${doc.SubscriptionGuid}|`;
+  const key = `${scope}${doc.Date}|${doc.ServiceName || ""}|${doc.ServiceType || ""}|${doc.ServiceResource || ""}|${doc.ResourceName || ""}`;
   return crypto.createHash("md5").update(key).digest("hex");
 }
 
@@ -115,7 +157,7 @@ async function upsertDoc(doc) {
 }
 
 // ─── Fetch Cost Data (Cost Management Query API) ─────────────────────────────
-async function fetchCostData(token, startDate, endDate) {
+async function fetchCostData(token, subscriptionId, startDate, endDate) {
   const allRows = [];
   const body = JSON.stringify({
     type: "ActualCost",
@@ -167,7 +209,7 @@ async function fetchCostData(token, startDate, endDate) {
 
 // ─── Map API row → Cosmos document ────────────────────────────────────────────
 // Row format: [Cost, UsageQuantity, UsageDate(YYYYMMDD), MeterCategory, MeterSubcategory, Meter, ResourceId, Currency]
-function mapRowToCosmos(row) {
+function mapRowToCosmos(row, sub) {
   const cost = row[0] || 0;
   const quantity = row[1] || 0;
   const dateNum = String(row[2]);
@@ -180,8 +222,8 @@ function mapRowToCosmos(row) {
 
   const doc = {
     Date: `${dateStr}T00:00:00`,
-    SubscriptionName: "Xi_Sponsored_Subscription",
-    SubscriptionGuid: subscriptionId,
+    SubscriptionName: sub.name,
+    SubscriptionGuid: sub.id,
     ResourceGuid: "",
     ServiceName: meterCategory,
     ServiceType: meterSubcategory,
@@ -199,13 +241,20 @@ function mapRowToCosmos(row) {
 module.exports = async function (context, req) {
   context.log("syncCosts invoked");
 
-  // Validate env vars
-  if (!tenantId || !clientId || !clientSecret || !subscriptionId) {
-    context.res = { status: 500, body: { error: "Missing ARM_TENANT_ID/ARM_CLIENT_ID/ARM_CLIENT_SECRET/ARM_SUBSCRIPTION_ID" } };
-    return;
-  }
   if (!cosmosKey) {
     context.res = { status: 500, body: { error: "Missing COSMOS_KEY" } };
+    return;
+  }
+
+  let subscriptions;
+  try {
+    subscriptions = resolveSubscriptions();
+  } catch (err) {
+    context.res = { status: 500, body: { error: `Invalid ARM_SUBSCRIPTIONS: ${err.message}` } };
+    return;
+  }
+  if (subscriptions.length === 0) {
+    context.res = { status: 500, body: { error: "No subscriptions configured (set ARM_SUBSCRIPTION_ID or ARM_SUBSCRIPTIONS)" } };
     return;
   }
 
@@ -214,59 +263,78 @@ module.exports = async function (context, req) {
   const endDate = now.toISOString().split("T")[0];
   const startDate = new Date(now.getTime() - days * 86400000).toISOString().split("T")[0];
 
-  context.log(`Fetching usage details: ${startDate} to ${endDate} (${days} days)`);
+  context.log(`Fetching ${startDate} to ${endDate} (${days} days) for ${subscriptions.length} subscription(s)`);
 
-  try {
-    // 1. Get ARM token
-    const token = await getArmToken();
-    context.log("ARM token acquired");
+  // One token per credential set, shared by every subscription using it
+  const tokenCache = new Map();
+  async function tokenFor(cred) {
+    const key = cred || "default";
+    if (!tokenCache.has(key)) tokenCache.set(key, await getArmToken(cred));
+    return tokenCache.get(key);
+  }
 
-    // 2. Fetch cost data from Cost Management Query API
-    const rows = await fetchCostData(token, startDate, endDate);
-    context.log(`Fetched ${rows.length} cost rows from API`);
+  const CONCURRENCY = 20;
+  const results = [];
+  let totalFetched = 0;
+  let totalSucceeded = 0;
+  let totalFailed = 0;
 
-    if (rows.length === 0) {
-      context.res = { status: 200, body: { message: "No records found for date range", startDate, endDate, synced: 0 } };
-      return;
-    }
+  // A failure on one subscription must not abort the others
+  for (const sub of subscriptions) {
+    try {
+      const token = await tokenFor(sub.cred);
+      const rows = await fetchCostData(token, sub.id, startDate, endDate);
+      context.log(`${sub.name}: fetched ${rows.length} rows`);
+      totalFetched += rows.length;
 
-    // 3. Map and upsert to Cosmos
-    let succeeded = 0;
-    let failed = 0;
-    const errors = [];
-    const CONCURRENCY = 20;
-    const docs = rows.map(mapRowToCosmos);
+      if (rows.length === 0) {
+        results.push({ subscription: sub.name, fetched: 0, succeeded: 0, failed: 0 });
+        continue;
+      }
 
-    for (let i = 0; i < docs.length; i += CONCURRENCY) {
-      const chunk = docs.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(chunk.map((doc) => upsertDoc(doc)));
+      let succeeded = 0;
+      let failed = 0;
+      const errors = [];
+      const docs = rows.map((row) => mapRowToCosmos(row, sub));
 
-      for (const r of results) {
-        if (r.status === "fulfilled" && r.value.status >= 200 && r.value.status < 300) {
-          succeeded++;
-        } else {
-          failed++;
-          const msg = r.status === "fulfilled"
-            ? `Cosmos ${r.value.status}: ${JSON.stringify(r.value.body).substring(0, 150)}`
-            : r.reason?.message || "Unknown";
-          if (errors.length < 5) errors.push(msg);
+      for (let i = 0; i < docs.length; i += CONCURRENCY) {
+        const chunk = docs.slice(i, i + CONCURRENCY);
+        const settled = await Promise.allSettled(chunk.map((doc) => upsertDoc(doc)));
+
+        for (const r of settled) {
+          if (r.status === "fulfilled" && r.value.status >= 200 && r.value.status < 300) {
+            succeeded++;
+          } else {
+            failed++;
+            const msg = r.status === "fulfilled"
+              ? `Cosmos ${r.value.status}: ${JSON.stringify(r.value.body).substring(0, 150)}`
+              : r.reason?.message || "Unknown";
+            if (errors.length < 5) errors.push(msg);
+          }
         }
       }
 
-      // Log progress every 200
-      if (i % 200 === 0 && i > 0) {
-        context.log(`Progress: ${i}/${docs.length} — OK: ${succeeded}, Fail: ${failed}`);
-      }
+      totalSucceeded += succeeded;
+      totalFailed += failed;
+      context.log(`${sub.name}: ${succeeded} ok, ${failed} failed`);
+      results.push({ subscription: sub.name, fetched: rows.length, succeeded, failed, errors });
+    } catch (err) {
+      context.log.error(`${sub.name} failed:`, err.message);
+      results.push({ subscription: sub.name, error: err.message });
     }
-
-    context.log(`syncCosts done: ${succeeded} succeeded, ${failed} failed`);
-    context.res = {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-      body: { startDate, endDate, fetched: rows.length, succeeded, failed, errors },
-    };
-  } catch (err) {
-    context.log.error("syncCosts failed:", err.message);
-    context.res = { status: 500, body: { error: err.message } };
   }
+
+  const allFailed = results.every((r) => r.error);
+  context.res = {
+    status: allFailed ? 500 : 200,
+    headers: { "Content-Type": "application/json" },
+    body: {
+      startDate,
+      endDate,
+      fetched: totalFetched,
+      succeeded: totalSucceeded,
+      failed: totalFailed,
+      subscriptions: results,
+    },
+  };
 };

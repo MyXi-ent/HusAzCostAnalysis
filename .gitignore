@@ -7,3 +7,4 @@ upload-cosmos.js
 check-vms.js
 api/_*.js
 _*.js
+_*.ps1
