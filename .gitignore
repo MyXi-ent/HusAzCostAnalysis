@@ -6,3 +6,4 @@ query-cosmos.js
 upload-cosmos.js
 check-vms.js
 api/_*.js
+_*.js

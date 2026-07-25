@@ -225,6 +225,37 @@ h1 {
     transition: color 0.2s;
 }
 .service-external-link:hover { color: #4fc3f7; }
+
+/* Anomaly indicator badge */
+.anomaly-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+    white-space: nowrap;
+    cursor: help;
+    border: 1px solid transparent;
+}
+.anomaly-high.anomaly-up {
+    color: #ff8a80;
+    background: rgba(239, 83, 80, 0.15);
+    border-color: rgba(239, 83, 80, 0.5);
+}
+.anomaly-medium.anomaly-up {
+    color: #ffcc80;
+    background: rgba(255, 167, 38, 0.13);
+    border-color: rgba(255, 167, 38, 0.45);
+}
+.anomaly-high.anomaly-down,
+.anomaly-medium.anomaly-down {
+    color: #a5d6a7;
+    background: rgba(102, 187, 106, 0.13);
+    border-color: rgba(102, 187, 106, 0.45);
+}
 .service-filter-btn { cursor: pointer; font-size: 0.65rem; color: #666; margin-left: 6px; vertical-align: middle; }
 .service-filter-btn:hover { color: #4fc3f7; }
 .service-link {

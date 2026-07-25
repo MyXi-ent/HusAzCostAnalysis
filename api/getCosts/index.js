@@ -100,12 +100,18 @@ module.exports = async function (context, req) {
 
     const dailyMap = {};
     const serviceMap = {};
+    const serviceDaily = {};   // ServiceName -> { date -> cost }  (for anomaly detection)
+    const allDates = new Set();
     for (const d of docs) {
       const date = d.Date.split('T')[0];
       const res = d.ServiceResource || 'Other';
       const resourceName = d.ResourceName || '';
       const matchesFilter = (!filterService || d.ServiceName === filterService) &&
                             (!filterResource || res === filterResource);
+
+      allDates.add(date);
+      if (!serviceDaily[d.ServiceName]) serviceDaily[d.ServiceName] = {};
+      serviceDaily[d.ServiceName][date] = (serviceDaily[d.ServiceName][date] || 0) + d.Cost;
 
       // dailyMap only includes filtered data when filter is active
       if (matchesFilter) {
@@ -139,6 +145,43 @@ module.exports = async function (context, req) {
       }))
       .sort((a, b) => b.cost - a.cost);
 
+    // --- Anomaly / trend detection: last 7 complete days vs prior days ---
+    const sortedDates = [...allDates].sort();
+    // Drop the most recent day - it is usually partial and would skew the comparison
+    const usableDates = sortedDates.length > 1 ? sortedDates.slice(0, -1) : sortedDates;
+    const recentDates = usableDates.slice(-7);
+    const priorDates = usableDates.slice(0, -7);
+
+    if (recentDates.length >= 3 && priorDates.length >= 3) {
+      for (const svc of serviceBreakdown) {
+        const daily = serviceDaily[svc.service] || {};
+        const recentAvg = recentDates.reduce((s, dt) => s + (daily[dt] || 0), 0) / recentDates.length;
+        const priorAvg = priorDates.reduce((s, dt) => s + (daily[dt] || 0), 0) / priorDates.length;
+        const delta = recentAvg - priorAvg;
+        // Percent change; treat a near-zero baseline with real recent spend as "new"
+        const isNew = priorAvg < 0.01 && recentAvg >= 0.01;
+        const pct = isNew ? null : (priorAvg > 0 ? (delta / priorAvg) * 100 : 0);
+
+        // Only flag when the dollar impact is meaningful, to suppress noise
+        let severity = null;
+        if (Math.abs(delta) >= 1) {
+          const magnitude = isNew ? Infinity : Math.abs(pct);
+          if (magnitude >= 100) severity = 'high';
+          else if (magnitude >= 50) severity = 'medium';
+        }
+
+        svc.trend = {
+          priorAvg: Math.round(priorAvg * 100) / 100,
+          recentAvg: Math.round(recentAvg * 100) / 100,
+          delta: Math.round(delta * 100) / 100,
+          pct: pct === null ? null : Math.round(pct),
+          isNew,
+          severity,
+          direction: delta >= 0 ? 'up' : 'down'
+        };
+      }
+    }
+
     // totalCost reflects the filtered view (dailyTotals sum)
     const totalCost = Math.round(dailyTotals.reduce((s, d) => s + d.cost, 0) * 100) / 100;
 
@@ -146,7 +189,13 @@ module.exports = async function (context, req) {
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: { dateRange: { startDate, endDate }, dailyTotals, serviceBreakdown, totalCost }
+      body: {
+        dateRange: { startDate, endDate },
+        dailyTotals,
+        serviceBreakdown,
+        totalCost,
+        trendWindow: { recentDays: recentDates.length, priorDays: priorDates.length }
+      }
     };
   } catch (err) {
     context.log.error('getCosts failed', err.message);

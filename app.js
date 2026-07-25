@@ -104,6 +104,44 @@ function resolveGitHubCustomer(name) {
     return GITHUB_CUSTOMER_MAP[name] || name;
 }
 
+// Builds the anomaly indicator shown next to service / resource-group names.
+// Returns '' when the change is not significant enough to flag.
+function buildAnomalyBadge(trend) {
+    if (!trend || !trend.severity) return '';
+    const up = trend.direction === 'up';
+    const arrow = up ? '\u25B2' : '\u25BC';
+    const label = trend.isNew ? 'NEW' : `${up ? '+' : ''}${trend.pct}%`;
+    const cls = `anomaly-badge anomaly-${trend.severity} anomaly-${trend.direction}`;
+    const title = trend.isNew
+        ? `New spend: $${trend.recentAvg.toFixed(2)}/day over the last 7 days (no prior spend)`
+        : `Last 7 days: $${trend.recentAvg.toFixed(2)}/day vs $${trend.priorAvg.toFixed(2)}/day before ` +
+          `(${up ? '+' : ''}$${trend.delta.toFixed(2)}/day)`;
+    return `<span class="${cls}" title="${title}">${arrow} ${label}</span>`;
+}
+
+// Combines the trends of several services into one for a resource group
+function aggregateTrend(services) {
+    const withTrend = services.filter(s => s.trend);
+    if (!withTrend.length) return null;
+    const priorAvg = withTrend.reduce((s, x) => s + x.trend.priorAvg, 0);
+    const recentAvg = withTrend.reduce((s, x) => s + x.trend.recentAvg, 0);
+    const delta = recentAvg - priorAvg;
+    const isNew = priorAvg < 0.01 && recentAvg >= 0.01;
+    const pct = isNew ? null : (priorAvg > 0 ? (delta / priorAvg) * 100 : 0);
+    let severity = null;
+    if (Math.abs(delta) >= 1) {
+        const magnitude = isNew ? Infinity : Math.abs(pct);
+        if (magnitude >= 100) severity = 'high';
+        else if (magnitude >= 50) severity = 'medium';
+    }
+    return {
+        priorAvg, recentAvg, delta,
+        pct: pct === null ? null : Math.round(pct),
+        isNew, severity,
+        direction: delta >= 0 ? 'up' : 'down'
+    };
+}
+
 async function loadResourceMap() {
     try {
         const res = await fetch('/api/getResources');
@@ -406,10 +444,11 @@ function renderResourceGroups(serviceBreakdown) {
                 <span class="resource-cost">${formatCost(svc.cost)}</span>
             </div>`).join('');
         const portalUrl = `https://portal.azure.com/#@71a46d06-d6c8-4e81-8fe9-d2d6355392df/resource/subscriptions/75920ee3-5dda-44fd-89ea-619c3265442e/resourceGroups/${encodeURIComponent(rg.name)}/overview`;
+        const rgTrend = aggregateTrend(rg.services);
         return `
         <div class="service-card rg-card">
             <div class="service-info">
-                <a class="service-name service-link rg-name" href="${portalUrl}" target="_blank" title="Open RG in Azure Portal">${rg.name}</a>
+                <a class="service-name service-link rg-name" href="${portalUrl}" target="_blank" title="Open RG in Azure Portal">${rg.name}</a>${buildAnomalyBadge(rgTrend)}
                 <div class="service-cost">${formatCost(rg.cost)}</div>
                 <div class="service-meta">${rg.services.length} services</div>
                 <div class="service-bar">
@@ -468,7 +507,7 @@ function renderServices(serviceBreakdown) {
         const extLink = portalUrl
             ? `<a class="service-external-link" href="${portalUrl}" target="_blank" title="Open in Azure Portal">&#8599;</a>`
             : '';
-        const nameHtml = `<span class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${svc.service}</span>${extLink}`;
+        const nameHtml = `<span class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${svc.service}</span>${extLink}${buildAnomalyBadge(svc.trend)}`;
 
         return `
         <div class="service-card">
