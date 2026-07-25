@@ -94,61 +94,14 @@ let currentDateRange = { startDate: null, endDate: null };
 
 // GitHub Marketplace billing customer ID → GitHub username mapping
 const GITHUB_CUSTOMER_MAP = {
-    'customer-35461937': { username: 'mhusseinxi', displayName: 'Mohamed Hussein' },
-    'customer-37672319': { username: 'rayan-xi', displayName: 'Rayan' }
+    'customer-35461937': 'mhusseinxi',
+    'customer-37672319': 'rayan-xi',
+    'customer-95565701': 'customer-95565701',
+    'customer-112291424': 'customer-112291424'
 };
 
-function renderGitHubUsersPanel(serviceBreakdown) {
-    const panel = document.getElementById('githubUsersPanel');
-    const grid = document.getElementById('githubUsersGrid');
-    const githubService = serviceBreakdown.find(s => s.service === 'GitHub');
-    if (!githubService || !githubService.resources || githubService.resources.length === 0) {
-        panel.style.display = 'none';
-        return;
-    }
-
-    // Group resources by customer ID
-    const userCosts = {};
-    for (const res of githubService.resources) {
-        const custId = res.resourceName || '';
-        const mapped = GITHUB_CUSTOMER_MAP[custId];
-        const key = custId || 'unknown';
-        if (!userCosts[key]) {
-            userCosts[key] = {
-                username: mapped ? mapped.username : custId || 'Unknown',
-                displayName: mapped ? mapped.displayName : custId || 'Unknown',
-                totalCost: 0,
-                meters: []
-            };
-        }
-        userCosts[key].totalCost += res.cost;
-        userCosts[key].meters.push({ name: res.name, cost: res.cost });
-    }
-
-    const users = Object.values(userCosts).sort((a, b) => b.totalCost - a.totalCost);
-    const maxCost = users[0]?.totalCost || 1;
-
-    grid.innerHTML = users.map(user => {
-        const metersHtml = user.meters
-            .sort((a, b) => b.cost - a.cost)
-            .map(m => `<div class="gh-meter-row"><span class="gh-meter-name">${m.name}</span><span class="gh-meter-cost">${formatCost(m.cost)}</span></div>`)
-            .join('');
-        const pct = (user.totalCost / maxCost * 100).toFixed(1);
-        const avatarUrl = `https://github.com/${user.username}.png?size=48`;
-        return `
-        <div class="gh-user-card">
-            <img class="gh-avatar" src="${avatarUrl}" alt="${user.username}" onerror="this.src='icons/azure-monitor.svg'">
-            <div class="gh-user-info">
-                <div class="gh-user-name">${user.displayName}</div>
-                <div class="gh-user-handle">@${user.username}</div>
-                <div class="gh-user-cost">${formatCost(user.totalCost)}</div>
-                <div class="gh-user-bar"><div class="gh-user-bar-fill" style="width:${pct}%"></div></div>
-                <div class="gh-meters">${metersHtml}</div>
-            </div>
-        </div>`;
-    }).join('');
-
-    panel.style.display = '';
+function resolveGitHubCustomer(name) {
+    return GITHUB_CUSTOMER_MAP[name] || name;
 }
 
 async function loadResourceMap() {
@@ -486,7 +439,7 @@ function renderServices(serviceBreakdown) {
         const resourcesHtml = top10.map(r => {
             const mapped = getResourceName(svc.service, r.name);
             const badge = mapped ? buildResourceBadge(mapped)
-                : r.resourceName ? `<span class="resource-badge" title="${r.resourceName}">${r.resourceName}</span>` : '';
+                : r.resourceName ? `<span class="resource-badge" title="${r.resourceName}">${resolveGitHubCustomer(r.resourceName)}</span>` : '';
             return `
             <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
                 <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
@@ -501,7 +454,7 @@ function renderServices(serviceBreakdown) {
                 ${resources.slice(10).map(r => {
                     const mapped = getResourceName(svc.service, r.name);
                     const badge = mapped ? buildResourceBadge(mapped)
-                        : r.resourceName ? `<span class="resource-badge" title="${r.resourceName}">${r.resourceName}</span>` : '';
+                        : r.resourceName ? `<span class="resource-badge" title="${r.resourceName}">${resolveGitHubCustomer(r.resourceName)}</span>` : '';
                     return `
                     <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
                         <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
@@ -596,7 +549,6 @@ function renderData(data, source) {
         document.getElementById('dateRangeValue').textContent = `${fmt(data.dateRange.startDate)} — ${fmt(data.dateRange.endDate)}`;
     }
     renderChart(data.dailyTotals);
-    renderGitHubUsersPanel(data.serviceBreakdown);
     refreshView();
 
     const srcEl = document.getElementById('dataSource');

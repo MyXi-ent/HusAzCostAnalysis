@@ -172,61 +172,6 @@ h1 {
 
 #dailyChart { max-height: 260px; }
 
-/* GitHub Copilot Per-User Panel */
-.github-users-panel {
-    margin: 0 32px 24px;
-    padding: 20px 24px;
-    background: #0f1a30;
-    border: 1px solid #2a3a5c;
-    border-radius: 10px;
-}
-.github-users-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-.github-users-header h2 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #e0e0e0;
-    margin: 0;
-}
-.github-users-icon { width: 24px; height: 24px; }
-.github-users-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 14px;
-}
-.gh-user-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    background: #16213e;
-    border: 1px solid #2a3a5c;
-    border-radius: 8px;
-    padding: 14px;
-    transition: border-color 0.2s;
-}
-.gh-user-card:hover { border-color: #4fc3f7; }
-.gh-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    border: 2px solid #2a3a5c;
-}
-.gh-user-info { flex: 1; min-width: 0; }
-.gh-user-name { font-size: 0.9rem; font-weight: 600; color: #e0e0e0; }
-.gh-user-handle { font-size: 0.75rem; color: #888; margin-top: 1px; }
-.gh-user-cost { font-size: 1.15rem; font-weight: 700; color: #4fc3f7; margin-top: 4px; }
-.gh-user-bar { height: 4px; background: #1a2a4a; border-radius: 2px; margin-top: 6px; }
-.gh-user-bar-fill { height: 100%; background: linear-gradient(90deg, #4fc3f7, #81d4fa); border-radius: 2px; }
-.gh-meters { margin-top: 8px; }
-.gh-meter-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
-.gh-meter-name { font-size: 0.75rem; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
-.gh-meter-cost { font-size: 0.75rem; color: #ccc; font-weight: 500; }
-
 .service-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
