@@ -9,6 +9,10 @@
       "statusCode": 404
     },
     {
+      "route": "/api/syncCosts",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/icons/*",
       "allowedRoles": ["authenticated"]
     },
