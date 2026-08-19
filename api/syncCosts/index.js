@@ -269,7 +269,7 @@ module.exports = async function (context, req) {
     startDate = new Date(now.getTime() - days * 86400000).toISOString().split("T")[0];
   }
 
-  context.log(`Fetching ${startDate} to ${endDate} (${days} days) for ${subscriptions.length} subscription(s)`);
+  context.log(`Fetching ${startDate} to ${endDate} for ${subscriptions.length} subscription(s)`);
 
   // One token per credential set, shared by every subscription using it
   const tokenCache = new Map();
