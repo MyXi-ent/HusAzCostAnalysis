@@ -4,18 +4,24 @@ on:
   schedule:
     # Run at 03:00 UTC daily (06:00 KSA)
     - cron: "0 3 * * *"
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Number of days to sync (default 2, max 30)'
+        required: false
+        default: '2'
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger cost sync (last 2 days)
+      - name: Trigger cost sync
         run: |
+          DAYS=${{ github.event.inputs.days || '2' }}
           response=$(curl -s -w "\n%{http_code}" -X POST \
             "https://delightful-sea-0fa91060f.7.azurestaticapps.net/api/syncCosts" \
             -H "Content-Type: application/json" \
-            -d '{"days": 2}')
+            -d "{\"days\": $DAYS}")
           
           http_code=$(echo "$response" | tail -1)
           body=$(echo "$response" | sed '$d')
