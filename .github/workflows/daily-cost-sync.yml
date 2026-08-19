@@ -10,6 +10,12 @@ on:
         description: 'Number of days to sync (default 2, max 30)'
         required: false
         default: '2'
+      backfill_start:
+        description: 'Backfill start date (YYYY-MM-DD). Syncs in 2-day chunks to avoid timeout.'
+        required: false
+      backfill_end:
+        description: 'Backfill end date (YYYY-MM-DD). Required if backfill_start is set.'
+        required: false
 
 jobs:
   sync:
@@ -17,19 +23,39 @@ jobs:
     steps:
       - name: Trigger cost sync
         run: |
-          DAYS=${{ github.event.inputs.days || '2' }}
-          response=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://delightful-sea-0fa91060f.7.azurestaticapps.net/api/syncCosts" \
-            -H "Content-Type: application/json" \
-            -d "{\"days\": $DAYS}")
-          
-          http_code=$(echo "$response" | tail -1)
-          body=$(echo "$response" | sed '$d')
-          
-          echo "HTTP Status: $http_code"
-          echo "Response: $body"
-          
-          if [ "$http_code" -ne 200 ]; then
-            echo "::error::Sync failed with status $http_code"
-            exit 1
+          API_URL="https://delightful-sea-0fa91060f.7.azurestaticapps.net/api/syncCosts"
+          BACKFILL_START="${{ github.event.inputs.backfill_start }}"
+          BACKFILL_END="${{ github.event.inputs.backfill_end }}"
+
+          if [ -n "$BACKFILL_START" ] && [ -n "$BACKFILL_END" ]; then
+            echo "Backfilling $BACKFILL_START to $BACKFILL_END in 2-day chunks"
+            current="$BACKFILL_START"
+            while [ "$current" \< "$BACKFILL_END" ] || [ "$current" = "$BACKFILL_END" ]; do
+              chunk_end=$(date -u -d "$current + 1 day" +%Y-%m-%d)
+              if [ "$chunk_end" \> "$BACKFILL_END" ]; then chunk_end="$BACKFILL_END"; fi
+              echo "Syncing $current to $chunk_end..."
+              response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
+                -H "Content-Type: application/json" \
+                -d "{\"startDate\": \"$current\", \"endDate\": \"$chunk_end\"}")
+              http_code=$(echo "$response" | tail -1)
+              body=$(echo "$response" | sed '$d')
+              echo "  HTTP $http_code: $body"
+              if [ "$http_code" -ne 200 ]; then
+                echo "::warning::Chunk $current to $chunk_end failed with $http_code"
+              fi
+              current=$(date -u -d "$chunk_end + 1 day" +%Y-%m-%d)
+            done
+          else
+            DAYS=${{ github.event.inputs.days || '2' }}
+            response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"days\": $DAYS}")
+            http_code=$(echo "$response" | tail -1)
+            body=$(echo "$response" | sed '$d')
+            echo "HTTP Status: $http_code"
+            echo "Response: $body"
+            if [ "$http_code" -ne 200 ]; then
+              echo "::error::Sync failed with status $http_code"
+              exit 1
+            fi
           fi

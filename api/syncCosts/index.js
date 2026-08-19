@@ -258,10 +258,16 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const days = Math.min(Math.max(1, parseInt(req.body?.days) || 2), 30);
-  const now = new Date();
-  const endDate = now.toISOString().split("T")[0];
-  const startDate = new Date(now.getTime() - days * 86400000).toISOString().split("T")[0];
+  let startDate, endDate;
+  if (req.body?.startDate && req.body?.endDate) {
+    startDate = req.body.startDate;
+    endDate = req.body.endDate;
+  } else {
+    const days = Math.min(Math.max(1, parseInt(req.body?.days) || 2), 30);
+    const now = new Date();
+    endDate = now.toISOString().split("T")[0];
+    startDate = new Date(now.getTime() - days * 86400000).toISOString().split("T")[0];
+  }
 
   context.log(`Fetching ${startDate} to ${endDate} (${days} days) for ${subscriptions.length} subscription(s)`);
 
