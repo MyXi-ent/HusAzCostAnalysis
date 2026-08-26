@@ -208,6 +208,21 @@ function formatCost(value) {
     return '$' + value.toFixed(2);
 }
 
+function formatQuantity(qty, meterName) {
+    if (!qty) return '';
+    const isTokens = /tokens/i.test(meterName);
+    if (isTokens) {
+        const tokens = qty * 1000;
+        if (tokens >= 1e9) return (tokens / 1e9).toFixed(1) + 'B tokens';
+        if (tokens >= 1e6) return (tokens / 1e6).toFixed(1) + 'M tokens';
+        if (tokens >= 1e3) return (tokens / 1e3).toFixed(0) + 'K tokens';
+        return tokens.toFixed(0) + ' tokens';
+    }
+    if (qty >= 1e6) return (qty / 1e6).toFixed(1) + 'M';
+    if (qty >= 1e3) return (qty / 1e3).toFixed(1) + 'K';
+    return qty.toLocaleString();
+}
+
 function getDateRange(days) {
     const end = new Date();
     const start = new Date();
@@ -410,10 +425,10 @@ function renderTable(serviceBreakdown) {
     for (const svc of serviceBreakdown) {
         if (svc.resources && svc.resources.length > 0) {
             for (const r of svc.resources) {
-                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records, trend: r.trend || null });
+                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records, trend: r.trend || null, quantity: r.quantity || 0 });
             }
         } else {
-            rows.push({ service: svc.service, resource: '—', resourceName: '', cost: svc.cost, records: svc.records, trend: svc.trend || null });
+            rows.push({ service: svc.service, resource: '—', resourceName: '', cost: svc.cost, records: svc.records, trend: svc.trend || null, quantity: 0 });
         }
     }
 
@@ -439,6 +454,7 @@ function renderTable(serviceBreakdown) {
             <td>${r.resource}</td>
             <td class="mapped-resource-cell">${r.resourceName}</td>
             <td>${formatCost(r.cost)}</td>
+            <td class="qty-cell">${r.quantity ? formatQuantity(r.quantity, r.resource) : ''}</td>
             <td class="trend-cell">${buildAnomalyBadge(r.trend)}</td>
             <td>${r.records}</td>
         </tr>`;
@@ -528,9 +544,11 @@ function renderServices(serviceBreakdown) {
         const top10 = resources.slice(0, 10);
         const hasMore = resources.length > 10;
         const resourcesHtml = top10.map(r => {
+            const qtyHtml = r.quantity ? `<span class="resource-qty">${formatQuantity(r.quantity, r.name)}</span>` : '';
             return `
             <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
                 <span class="resource-name" title="${r.name}">${r.name}</span>
+                ${qtyHtml}
                 <span class="resource-cost">${formatCost(r.cost)}</span>
             </div>`;
         }).join('');
@@ -540,9 +558,11 @@ function renderServices(serviceBreakdown) {
             </div>
             <div class="resource-overflow" id="overflow-${idx}" style="display:none">
                 ${resources.slice(10).map(r => {
+                    const qtyHtml = r.quantity ? `<span class="resource-qty">${formatQuantity(r.quantity, r.name)}</span>` : '';
                     return `
                     <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
                         <span class="resource-name" title="${r.name}">${r.name}</span>
+                        ${qtyHtml}
                         <span class="resource-cost">${formatCost(r.cost)}</span>
                     </div>`;
                 }).join('')}

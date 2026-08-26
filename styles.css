@@ -331,7 +331,8 @@ h1 {
     color: #90caf9;
     white-space: normal;
     word-break: break-word;
-    max-width: 75%;
+    flex: 1;
+    min-width: 0;
     line-height: 1.3;
 }
 .resource-name .resource-badge {
@@ -346,6 +347,14 @@ h1 {
     color: #a5d6a7;
     font-weight: 500;
     white-space: nowrap;
+}
+.resource-qty {
+    color: #b0bec5;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    margin-left: auto;
+    margin-right: 8px;
+    flex-shrink: 0;
 }
 .resource-clickable {
     cursor: pointer;

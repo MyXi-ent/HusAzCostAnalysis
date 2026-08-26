@@ -95,7 +95,7 @@ module.exports = async function (context, req) {
   context.log(`Querying Cosmos DB for range: ${startDate} to ${endDate}, filter: ${filterService}/${filterResource}`);
   try {
     const docs = await cosmosQuery(
-      "SELECT c.Date, c.ServiceName, c.ServiceResource, c.Cost, c.ResourceName FROM c WHERE c.Date >= @start AND c.Date <= @end",
+      "SELECT c.Date, c.ServiceName, c.ServiceResource, c.Cost, c.Quantity, c.ResourceName FROM c WHERE c.Date >= @start AND c.Date <= @end",
       [{ name: "@start", value: `${startDate}T00:00:00` }, { name: "@end", value: `${endDate}T00:00:00` }]
     );
 
@@ -126,9 +126,10 @@ module.exports = async function (context, req) {
       serviceMap[d.ServiceName].records++;
       // Group by ServiceResource + ResourceName so different resources show separately
       const resKey = resourceName ? `${res}|${resourceName}` : res;
-      if (!serviceMap[d.ServiceName].resources[resKey]) serviceMap[d.ServiceName].resources[resKey] = { cost: 0, records: 0, resourceName: '', meter: res };
+      if (!serviceMap[d.ServiceName].resources[resKey]) serviceMap[d.ServiceName].resources[resKey] = { cost: 0, records: 0, resourceName: '', meter: res, quantity: 0 };
       serviceMap[d.ServiceName].resources[resKey].cost += d.Cost;
       serviceMap[d.ServiceName].resources[resKey].records++;
+      serviceMap[d.ServiceName].resources[resKey].quantity += (d.Quantity || 0);
       if (resourceName) serviceMap[d.ServiceName].resources[resKey].resourceName = resourceName;
 
       // Per-meter daily series, for row-level anomaly detection in the table view
@@ -147,7 +148,7 @@ module.exports = async function (context, req) {
         cost: Math.round(v.cost * 100) / 100,
         records: v.records,
         resources: Object.entries(v.resources)
-          .map(([key, r]) => ({ name: r.meter || key, cost: Math.round(r.cost * 100) / 100, records: r.records, resourceName: r.resourceName || '', _key: key }))
+          .map(([key, r]) => ({ name: r.meter || key, cost: Math.round(r.cost * 100) / 100, records: r.records, resourceName: r.resourceName || '', quantity: Math.round(r.quantity), _key: key }))
           .sort((a, b) => b.cost - a.cost)
       }))
       .sort((a, b) => b.cost - a.cost);
