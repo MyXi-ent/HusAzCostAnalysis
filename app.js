@@ -100,7 +100,7 @@ function getResourceGroup(serviceName) {
 
 let dailyChart = null;
 let currentData = null;
-let currentGranularity = 'day';
+let currentGranularity = 'month';
 let currentView = 'cards';
 let currentSort = { key: 'cost', dir: 'desc' };
 let resourceData = null;
@@ -837,7 +837,7 @@ if (_sponsorDaysEl) {
     _sponsorDaysEl.textContent = _days > 0 ? _days.toLocaleString() : 'Expired';
 }
 
-// Initial load — 90 days + resource map
+// Initial load — 1 year + resource map
 loadResourceMap();
-const { startDate, endDate } = getDateRange(90);
+const { startDate, endDate } = getDateRange(365);
 loadData(startDate, endDate);
