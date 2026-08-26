@@ -34,6 +34,21 @@ const ICON_MAP = {
     'Web PubSub': 'service-bus'
 };
 
+// Friendly display names for Azure MeterCategory values
+const DISPLAY_NAME_MAP = {
+    'Foundry Tools': 'AI Speech & Vision',
+    'Foundry Models': 'AI Models (OpenAI)',
+    'Messaging': 'Communication Services',
+    'Bandwidth': 'Network Bandwidth',
+    'Functions': 'Azure Functions',
+    'GitHub': 'GitHub (Copilot & Actions)',
+    'Log Analytics': 'Log Analytics & Monitoring'
+};
+
+function getDisplayName(serviceName) {
+    return DISPLAY_NAME_MAP[serviceName] || serviceName;
+}
+
 const PORTAL_LINK_MAP = {
     'API Management': '#browse/Microsoft.ApiManagement%2Fservice',
     'Automation': '#browse/Microsoft.Automation%2FAutomationAccounts',
@@ -312,7 +327,7 @@ function renderChart(dailyTotals) {
 function setResourceFilter(service, resource) {
     currentResourceFilter = { service, resource: resource || null };
     document.getElementById('resourceFilterBanner').style.display = 'flex';
-    document.getElementById('resourceFilterText').textContent = resource ? `${service} → ${resource}` : service;
+    document.getElementById('resourceFilterText').textContent = resource ? `${getDisplayName(service)} → ${resource}` : getDisplayName(service);
     if (currentDateRange.startDate) {
         loadData(currentDateRange.startDate, currentDateRange.endDate);
     }
@@ -442,7 +457,7 @@ function renderResourceGroups(serviceBreakdown) {
             <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="">
                 <span class="resource-name">
                     <img src="${getIconPath(svc.service)}" class="rg-svc-icon" onerror="this.src='icons/azure-monitor.svg'">
-                    ${svc.service}
+                    ${getDisplayName(svc.service)}
                 </span>
                 <span class="resource-cost">${formatCost(svc.cost)}</span>
             </div>`).join('');
@@ -504,12 +519,13 @@ function renderServices(serviceBreakdown) {
         const extLink = portalUrl
             ? `<a class="service-external-link" href="${portalUrl}" target="_blank" title="Open in Azure Portal">&#8599;</a>`
             : '';
-        const nameHtml = `<span class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${svc.service}</span>${extLink}${buildAnomalyBadge(svc.trend)}`;
+        const displayName = getDisplayName(svc.service);
+        const nameHtml = `<span class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${displayName}</span>${extLink}${buildAnomalyBadge(svc.trend)}`;
 
         return `
         <div class="service-card">
             <div class="service-icon">
-                <img src="${getIconPath(svc.service)}" alt="${svc.service}" onerror="this.src='icons/azure-monitor.svg'">
+                <img src="${getIconPath(svc.service)}" alt="${displayName}" onerror="this.src='icons/azure-monitor.svg'">
             </div>
             <div class="service-info">
                 ${nameHtml}
