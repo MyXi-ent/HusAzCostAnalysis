@@ -152,36 +152,52 @@ module.exports = async function (context, req) {
       }))
       .sort((a, b) => b.cost - a.cost);
 
-    // --- Anomaly / trend detection: recent window vs prior window ---
-    // Window size adapts to the selected groupBy granularity.
-    const trendSize = groupBy === 'month' ? 30 : groupBy === 'week' ? 7 : 7;
+    // --- Anomaly / trend detection ---
     const sortedDates = [...allDates].sort();
-    // Drop the most recent day - it is usually partial and would skew the comparison
     const usableDates = sortedDates.length > 1 ? sortedDates.slice(0, -1) : sortedDates;
-    const recentDates = usableDates.slice(-trendSize);
-    const priorDates = usableDates.slice(-trendSize * 2, -trendSize);
-    const hasTrendWindow = recentDates.length >= 3 && priorDates.length >= 3;
 
-    // minDelta is the dollar-per-day impact below which a change is treated as noise.
-    // Meters are individually smaller than whole services, so they use a lower bar.
+    // For monthly groupBy, compare calendar months instead of sliding windows
+    let recentDates, priorDates, hasTrendWindow;
+    if (groupBy === 'month' && usableDates.length > 0) {
+      const monthBuckets = {};
+      for (const dt of usableDates) { const m = dt.substring(0, 7); (monthBuckets[m] = monthBuckets[m] || []).push(dt); }
+      const months = Object.keys(monthBuckets).sort();
+      if (months.length >= 2) {
+        recentDates = monthBuckets[months[months.length - 1]];
+        priorDates = monthBuckets[months[months.length - 2]];
+        hasTrendWindow = true;
+      } else {
+        recentDates = []; priorDates = []; hasTrendWindow = false;
+      }
+    } else {
+      const trendSize = groupBy === 'week' ? 7 : 7;
+      recentDates = usableDates.slice(-trendSize);
+      priorDates = usableDates.slice(-trendSize * 2, -trendSize);
+      hasTrendWindow = recentDates.length >= 3 && priorDates.length >= 3;
+    }
+
     function computeTrend(daily, minDelta) {
-      const recentAvg = recentDates.reduce((s, dt) => s + (daily[dt] || 0), 0) / recentDates.length;
-      const priorAvg = priorDates.reduce((s, dt) => s + (daily[dt] || 0), 0) / priorDates.length;
-      const delta = recentAvg - priorAvg;
-      // Treat a near-zero baseline with real recent spend as brand new, not a huge percentage
-      const isNew = priorAvg < 0.01 && recentAvg >= 0.01;
-      const pct = isNew ? null : (priorAvg > 0 ? (delta / priorAvg) * 100 : 0);
+      // For monthly mode, compare totals; for daily mode, compare averages
+      const useTotal = groupBy === 'month';
+      const recentVal = recentDates.reduce((s, dt) => s + (daily[dt] || 0), 0);
+      const priorVal = priorDates.reduce((s, dt) => s + (daily[dt] || 0), 0);
+      const recentCmp = useTotal ? recentVal : recentVal / recentDates.length;
+      const priorCmp = useTotal ? priorVal : priorVal / priorDates.length;
+      const delta = recentCmp - priorCmp;
+      const minD = useTotal ? minDelta * 30 : minDelta;
+      const isNew = priorCmp < 0.01 && recentCmp >= 0.01;
+      const pct = isNew ? null : (priorCmp > 0 ? (delta / priorCmp) * 100 : 0);
 
       let severity = null;
-      if (Math.abs(delta) >= minDelta) {
+      if (Math.abs(delta) >= minD) {
         const magnitude = isNew ? Infinity : Math.abs(pct);
         if (magnitude >= 100) severity = 'high';
         else if (magnitude >= 25) severity = 'medium';
       }
 
       return {
-        priorAvg: Math.round(priorAvg * 100) / 100,
-        recentAvg: Math.round(recentAvg * 100) / 100,
+        priorAvg: Math.round(priorCmp * 100) / 100,
+        recentAvg: Math.round(recentCmp * 100) / 100,
         delta: Math.round(delta * 100) / 100,
         pct: pct === null ? null : Math.round(pct),
         isNew,
