@@ -113,8 +113,8 @@ function buildAnomalyBadge(trend) {
     const label = trend.isNew ? 'NEW' : `${up ? '+' : ''}${trend.pct}%`;
     const cls = `anomaly-badge anomaly-${trend.severity} anomaly-${trend.direction}`;
     const title = trend.isNew
-        ? `New spend: $${trend.recentAvg.toFixed(2)}/day over the last 7 days (no prior spend)`
-        : `Last 7 days: $${trend.recentAvg.toFixed(2)}/day vs $${trend.priorAvg.toFixed(2)}/day before ` +
+        ? `New spend: $${trend.recentAvg.toFixed(2)}/day over the recent period (no prior spend)`
+        : `Recent period: $${trend.recentAvg.toFixed(2)}/day vs $${trend.priorAvg.toFixed(2)}/day prior ` +
           `(${up ? '+' : ''}$${trend.delta.toFixed(2)}/day)`;
     return `<span class="${cls}" title="${title}">${arrow} ${label}</span>`;
 }
@@ -204,7 +204,7 @@ function getDateRange(days) {
 }
 
 async function fetchCostData(startDate, endDate, filter) {
-    let url = `/api/getCosts?startDate=${startDate}&endDate=${endDate}`;
+    let url = `/api/getCosts?startDate=${startDate}&endDate=${endDate}&groupBy=${currentGranularity}`;
     if (filter) {
         url += `&service=${encodeURIComponent(filter.service)}`;
         if (filter.resource) url += `&resource=${encodeURIComponent(filter.resource)}`;

@@ -84,6 +84,7 @@ module.exports = async function (context, req) {
   const endDate = req.query.endDate || req.body?.endDate;
   const filterService = req.query.service || null;
   const filterResource = req.query.resource || null;
+  const groupBy = req.query.groupBy || 'day';
 
   if (!startDate || !endDate) {
     context.log.warn('Missing date parameters', { startDate, endDate });
@@ -151,12 +152,14 @@ module.exports = async function (context, req) {
       }))
       .sort((a, b) => b.cost - a.cost);
 
-    // --- Anomaly / trend detection: last 7 complete days vs prior days ---
+    // --- Anomaly / trend detection: recent window vs prior window ---
+    // Window size adapts to the selected groupBy granularity.
+    const trendSize = groupBy === 'month' ? 30 : groupBy === 'week' ? 7 : 7;
     const sortedDates = [...allDates].sort();
     // Drop the most recent day - it is usually partial and would skew the comparison
     const usableDates = sortedDates.length > 1 ? sortedDates.slice(0, -1) : sortedDates;
-    const recentDates = usableDates.slice(-7);
-    const priorDates = usableDates.slice(0, -7);
+    const recentDates = usableDates.slice(-trendSize);
+    const priorDates = usableDates.slice(-trendSize * 2, -trendSize);
     const hasTrendWindow = recentDates.length >= 3 && priorDates.length >= 3;
 
     // minDelta is the dollar-per-day impact below which a change is treated as noise.
