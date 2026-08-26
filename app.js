@@ -282,14 +282,15 @@ function renderChart(dailyTotals) {
                 if (pct === null || pct === undefined) return;
                 const rounded = Math.round(pct);
                 if (rounded === 0) return;
+                const arrow = rounded > 0 ? '▲' : '▼';
                 const sign = rounded > 0 ? '+' : '';
-                const label = `${sign}${rounded}%`;
+                const label = `${arrow} ${sign}${rounded}%`;
                 const color = rounded > 0 ? '#ff5252' : '#4caf50';
-                c.font = 'bold 11px sans-serif';
+                c.font = 'bold 13px sans-serif';
                 c.fillStyle = color;
                 c.textAlign = 'center';
                 c.textBaseline = 'bottom';
-                c.fillText(label, bar.x, bar.y - 4);
+                c.fillText(label, bar.x, bar.y - 6);
             });
             c.restore();
         }
