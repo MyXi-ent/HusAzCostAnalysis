@@ -479,12 +479,9 @@ function renderServices(serviceBreakdown) {
         const top10 = resources.slice(0, 10);
         const hasMore = resources.length > 10;
         const resourcesHtml = top10.map(r => {
-            const mapped = getResourceName(svc.service, r.name);
-            const badge = mapped ? buildResourceBadge(mapped)
-                : r.resourceName ? `<span class="resource-badge" title="${r.resourceName}">${resolveGitHubCustomer(r.resourceName)}</span>` : '';
             return `
             <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
-                <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
+                <span class="resource-name" title="${r.name}">${r.name}</span>
                 <span class="resource-cost">${formatCost(r.cost)}</span>
             </div>`;
         }).join('');
@@ -494,12 +491,9 @@ function renderServices(serviceBreakdown) {
             </div>
             <div class="resource-overflow" id="overflow-${idx}" style="display:none">
                 ${resources.slice(10).map(r => {
-                    const mapped = getResourceName(svc.service, r.name);
-                    const badge = mapped ? buildResourceBadge(mapped)
-                        : r.resourceName ? `<span class="resource-badge" title="${r.resourceName}">${resolveGitHubCustomer(r.resourceName)}</span>` : '';
                     return `
                     <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
-                        <span class="resource-name" title="${r.name}">${r.name}${badge}</span>
+                        <span class="resource-name" title="${r.name}">${r.name}</span>
                         <span class="resource-cost">${formatCost(r.cost)}</span>
                     </div>`;
                 }).join('')}
