@@ -264,22 +264,55 @@ function renderChart(dailyTotals) {
     const timeUnit = currentGranularity === 'month' ? 'month' : currentGranularity === 'week' ? 'week' : (aggregated.length > 90 ? 'month' : 'week');
     const label = currentGranularity === 'month' ? 'Monthly Cost ($)' : currentGranularity === 'week' ? 'Weekly Cost ($)' : 'Daily Cost ($)';
 
+    // Compute month-over-month % change for each bar
+    const costs = aggregated.map(d => d.cost);
+    const pctChanges = costs.map((c, i) => {
+        if (i === 0 || costs[i - 1] === 0) return null;
+        return ((c - costs[i - 1]) / costs[i - 1]) * 100;
+    });
+
+    const trendLabelPlugin = {
+        id: 'trendLabels',
+        afterDatasetsDraw(chart) {
+            const { ctx: c, data, chartArea } = chart;
+            const meta = chart.getDatasetMeta(0);
+            c.save();
+            meta.data.forEach((bar, i) => {
+                const pct = pctChanges[i];
+                if (pct === null || pct === undefined) return;
+                const rounded = Math.round(pct);
+                if (rounded === 0) return;
+                const sign = rounded > 0 ? '+' : '';
+                const label = `${sign}${rounded}%`;
+                const color = rounded > 0 ? '#ff5252' : '#4caf50';
+                c.font = 'bold 11px sans-serif';
+                c.fillStyle = color;
+                c.textAlign = 'center';
+                c.textBaseline = 'bottom';
+                c.fillText(label, bar.x, bar.y - 4);
+            });
+            c.restore();
+        }
+    };
+
     dailyChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: aggregated.map(d => d.date),
             datasets: [{
                 label,
-                data: aggregated.map(d => d.cost),
+                data: costs,
                 backgroundColor: 'rgba(79, 195, 247, 0.4)',
                 borderColor: '#4fc3f7',
                 borderWidth: 1,
                 borderRadius: 3
             }]
         },
+        plugins: [trendLabelPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: { padding: { top: 20 } },
             onClick: (event, elements) => {
                 if (!elements.length) return;
                 const idx = elements[0].index;
