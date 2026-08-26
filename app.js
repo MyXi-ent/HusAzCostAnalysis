@@ -132,7 +132,7 @@ function aggregateTrend(services) {
     if (Math.abs(delta) >= 1) {
         const magnitude = isNew ? Infinity : Math.abs(pct);
         if (magnitude >= 100) severity = 'high';
-        else if (magnitude >= 50) severity = 'medium';
+        else if (magnitude >= 25) severity = 'medium';
     }
     return {
         priorAvg, recentAvg, delta,

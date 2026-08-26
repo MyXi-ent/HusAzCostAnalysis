@@ -176,7 +176,7 @@ module.exports = async function (context, req) {
       if (Math.abs(delta) >= minDelta) {
         const magnitude = isNew ? Infinity : Math.abs(pct);
         if (magnitude >= 100) severity = 'high';
-        else if (magnitude >= 50) severity = 'medium';
+        else if (magnitude >= 25) severity = 'medium';
       }
 
       return {
