@@ -215,6 +215,33 @@ module.exports = async function (context, req) {
         }
       }
     }
+
+    // Sustained growth detection: flag services with 3+ consecutive monthly increases
+    const monthlyByService = {};
+    for (const [svcName, daily] of Object.entries(serviceDaily)) {
+      const months = {};
+      for (const [dt, cost] of Object.entries(daily)) {
+        const m = dt.substring(0, 7);
+        months[m] = (months[m] || 0) + cost;
+      }
+      const sorted = Object.entries(months).sort((a, b) => a[0].localeCompare(b[0]));
+      if (sorted.length < 3) continue;
+      let streak = 0, maxStreak = 0;
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i][1] > sorted[i - 1][1] * 1.05) { streak++; maxStreak = Math.max(maxStreak, streak); }
+        else streak = 0;
+      }
+      if (maxStreak >= 2) {
+        const first = sorted[sorted.length - maxStreak - 1][1];
+        const last = sorted[sorted.length - 1][1];
+        const totalPct = first > 0 ? Math.round(((last - first) / first) * 100) : null;
+        monthlyByService[svcName] = { months: maxStreak + 1, totalPct, from: sorted[sorted.length - maxStreak - 1][0], to: sorted[sorted.length - 1][0] };
+      }
+    }
+    for (const svc of serviceBreakdown) {
+      if (monthlyByService[svc.service]) svc.growthWarning = monthlyByService[svc.service];
+    }
+
     // _key was only needed to look up the per-meter series
     for (const svc of serviceBreakdown) for (const r of svc.resources) delete r._key;
 

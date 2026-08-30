@@ -258,6 +258,26 @@ h1 {
 }
 .trend-cell { white-space: nowrap; }
 .trend-cell .anomaly-badge { margin-left: 0; }
+.growth-warning-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+    white-space: nowrap;
+    cursor: help;
+    color: #ffab40;
+    background: rgba(255, 171, 64, 0.12);
+    border: 1px solid rgba(255, 171, 64, 0.5);
+    animation: pulse-warn 2s ease-in-out infinite;
+}
+@keyframes pulse-warn {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
 .service-filter-btn { cursor: pointer; font-size: 0.65rem; color: #666; margin-left: 6px; vertical-align: middle; }
 .service-filter-btn:hover { color: #4fc3f7; }
 .service-link {
@@ -419,6 +439,33 @@ h1 {
     background: #2e7d32;
     color: #fff;
     border-color: #66bb6a;
+}
+/* VM name badge — compact inline tag in card view resource rows */
+.vm-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 3px;
+    background: #1a2a3a;
+    border: 1px solid #1976d2;
+    color: #90caf9;
+    font-size: 0.62rem;
+    font-weight: 500;
+    vertical-align: middle;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vm-badge-link {
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.vm-badge-link:hover {
+    background: #1565c0;
+    color: #fff;
+    border-color: #64b5f6;
 }
 .show-more-link {
     color: #4fc3f7;

@@ -134,6 +134,13 @@ function buildAnomalyBadge(trend) {
     return `<span class="${cls}" title="${title}">${arrow} ${label}</span>`;
 }
 
+function buildGrowthWarningBadge(growthWarning) {
+    if (!growthWarning) return '';
+    const pctLabel = growthWarning.totalPct !== null ? ` (+${growthWarning.totalPct}%)` : '';
+    const title = `Cost rising ${growthWarning.months} consecutive months (${growthWarning.from} → ${growthWarning.to})${pctLabel}`;
+    return `<span class="growth-warning-badge" title="${title}">⚠ Rising ${growthWarning.months}mo</span>`;
+}
+
 // Combines the trends of several services into one for a resource group
 function aggregateTrend(services) {
     const withTrend = services.filter(s => s.trend);
@@ -196,6 +203,31 @@ function buildResourceBadge(mapped) {
         return `<a class="resource-badge resource-badge-link" href="${url}" target="_blank" title="${title}">${r.name}</a>`;
     }
     return `<span class="resource-badge" title="${title}">${r.name}</span>`;
+}
+
+// Builds a compact inline badge showing the Azure resource name for a meter row.
+// Uses client-side SKU → resource mapping from /api/getResources (Resource Graph).
+// Only shown for Virtual Machines (for now).
+function buildInlineResourceBadge(serviceName, meterName, resourceName) {
+    if (serviceName !== 'Virtual Machines') return '';
+    // Use client-side SKU → resource mapping (has actual VM names like HusAzDev)
+    const mapped = getResourceName(serviceName, meterName);
+    if (!mapped || mapped.length === 0) return '';
+    // Filter to only VM-type entries
+    const vms = mapped.filter(m => m.type === 'VM');
+    if (vms.length === 0) return '';
+    if (vms.length > 2) {
+        const title = vms.map(m => m.name).join('\n');
+        return `<span class="vm-badge" title="${title}">${vms.length} VMs</span>`;
+    }
+    const r = vms[0];
+    const url = getResourcePortalUrl(r.id);
+    const label = vms.length === 2 ? `${vms[0].name}, ${vms[1].name}` : r.name;
+    const title = vms.map(m => m.name).join(', ');
+    if (url) {
+        return `<a class="vm-badge vm-badge-link" href="${url}" target="_blank" title="${title}">${label}</a>`;
+    }
+    return `<span class="vm-badge" title="${title}">${label}</span>`;
 }
 
 function getIconPath(serviceName) {
@@ -545,9 +577,10 @@ function renderServices(serviceBreakdown) {
         const hasMore = resources.length > 10;
         const resourcesHtml = top10.map(r => {
             const qtyHtml = r.quantity ? `<span class="resource-qty">${formatQuantity(r.quantity, r.name)}</span>` : '';
+            const vmBadge = buildInlineResourceBadge(svc.service, r.name, r.resourceName);
             return `
             <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
-                <span class="resource-name" title="${r.name}">${r.name}</span>
+                <span class="resource-name" title="${r.name}">${r.name}${vmBadge}</span>
                 ${qtyHtml}
                 <span class="resource-cost">${formatCost(r.cost)}</span>
             </div>`;
@@ -559,9 +592,10 @@ function renderServices(serviceBreakdown) {
             <div class="resource-overflow" id="overflow-${idx}" style="display:none">
                 ${resources.slice(10).map(r => {
                     const qtyHtml = r.quantity ? `<span class="resource-qty">${formatQuantity(r.quantity, r.name)}</span>` : '';
+                    const vmBadge = buildInlineResourceBadge(svc.service, r.name, r.resourceName);
                     return `
                     <div class="resource-row resource-clickable" data-service="${svc.service}" data-resource="${r.name}">
-                        <span class="resource-name" title="${r.name}">${r.name}</span>
+                        <span class="resource-name" title="${r.name}">${r.name}${vmBadge}</span>
                         ${qtyHtml}
                         <span class="resource-cost">${formatCost(r.cost)}</span>
                     </div>`;
@@ -574,7 +608,7 @@ function renderServices(serviceBreakdown) {
             ? `<a class="service-external-link" href="${portalUrl}" target="_blank" title="Open in Azure Portal">&#8599;</a>`
             : '';
         const displayName = getDisplayName(svc.service);
-        const nameHtml = `<span class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${displayName}</span>${extLink}${buildAnomalyBadge(svc.trend)}`;
+        const nameHtml = `<span class="service-name service-name-clickable" data-service="${svc.service}" title="Click to filter by ${svc.service}">${displayName}</span>${extLink}${buildAnomalyBadge(svc.trend)}${buildGrowthWarningBadge(svc.growthWarning)}`;
 
         return `
         <div class="service-card">
