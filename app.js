@@ -136,9 +136,14 @@ function buildAnomalyBadge(trend) {
 
 function buildGrowthWarningBadge(growthWarning) {
     if (!growthWarning) return '';
-    const pctLabel = growthWarning.totalPct !== null ? ` (+${growthWarning.totalPct}%)` : '';
-    const title = `Cost rising ${growthWarning.months} consecutive months (${growthWarning.from} → ${growthWarning.to})${pctLabel}`;
-    return `<span class="growth-warning-badge" title="${title}">⚠ Rising ${growthWarning.months}mo</span>`;
+    const w = growthWarning;
+    const pctLabel = w.totalPct !== null ? ` (+${w.totalPct}%)` : '';
+    const accelNote = w.accelerating ? ' — ACCELERATING' : '';
+    const title = `Statistically significant rising trend over ${w.months} months (${w.from} → ${w.to})${pctLabel}\n` +
+        `Mann-Kendall τ=${w.tau} | Slope: $${w.slope}/mo | Acceleration: $${w.acceleration}/mo²${accelNote}`;
+    const icon = w.accelerating ? '🔺' : '⚠';
+    const cls = w.level === 'high' ? 'growth-warning-badge growth-warning-high' : 'growth-warning-badge';
+    return `<span class="${cls}" title="${title}">${icon} Rising ${w.months}mo</span>`;
 }
 
 // Combines the trends of several services into one for a resource group

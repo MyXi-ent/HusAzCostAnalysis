@@ -216,8 +216,61 @@ module.exports = async function (context, req) {
       }
     }
 
-    // Sustained growth detection: flag services with 3+ consecutive monthly increases
-    const monthlyByService = {};
+    // Statistical trend detection: Mann-Kendall tau + linear slope + quadratic acceleration
+    function mannKendall(values) {
+      const n = values.length;
+      let s = 0;
+      for (let i = 0; i < n - 1; i++)
+        for (let j = i + 1; j < n; j++)
+          s += Math.sign(values[j] - values[i]);
+      const pairs = n * (n - 1) / 2;
+      const tau = s / pairs;
+      // Variance for significance (no ties correction needed for cost data)
+      const variance = n * (n - 1) * (2 * n + 5) / 18;
+      const z = s > 0 ? (s - 1) / Math.sqrt(variance) : s < 0 ? (s + 1) / Math.sqrt(variance) : 0;
+      return { tau, z, significant: Math.abs(z) > 1.645 }; // p < 0.05 one-tailed
+    }
+
+    function polyFit(values) {
+      const n = values.length;
+      // x = 0,1,2,...,n-1 (month index); y = monthly cost
+      let sx = 0, sy = 0, sxx = 0, sxy = 0, sx3 = 0, sx4 = 0, sx2y = 0;
+      for (let i = 0; i < n; i++) {
+        const x = i, y = values[i];
+        sx += x; sy += y; sxx += x * x; sxy += x * y;
+        sx3 += x * x * x; sx4 += x * x * x * x; sx2y += x * x * y;
+      }
+      // Linear: slope = (n*sxy - sx*sy) / (n*sxx - sx*sx)
+      const denom = n * sxx - sx * sx;
+      const slope = denom ? (n * sxy - sx * sy) / denom : 0;
+      // Quadratic: solve 3x3 normal equations for y = a*x^2 + b*x + c
+      const M = [[n, sx, sxx], [sx, sxx, sx3], [sxx, sx3, sx4]];
+      const R = [sy, sxy, sx2y];
+      // Gaussian elimination
+      for (let col = 0; col < 3; col++) {
+        let maxRow = col;
+        for (let row = col + 1; row < 3; row++)
+          if (Math.abs(M[row][col]) > Math.abs(M[maxRow][col])) maxRow = row;
+        [M[col], M[maxRow]] = [M[maxRow], M[col]];
+        [R[col], R[maxRow]] = [R[maxRow], R[col]];
+        if (Math.abs(M[col][col]) < 1e-12) continue;
+        for (let row = col + 1; row < 3; row++) {
+          const f = M[row][col] / M[col][col];
+          for (let j = col; j < 3; j++) M[row][j] -= f * M[col][j];
+          R[row] -= f * R[col];
+        }
+      }
+      const coeff = [0, 0, 0];
+      for (let i = 2; i >= 0; i--) {
+        let s = R[i];
+        for (let j = i + 1; j < 3; j++) s -= M[i][j] * coeff[j];
+        coeff[i] = Math.abs(M[i][i]) > 1e-12 ? s / M[i][i] : 0;
+      }
+      // coeff[0]=c, coeff[1]=b (linear), coeff[2]=a (acceleration)
+      return { slope, acceleration: coeff[2], intercept: coeff[0] };
+    }
+
+    const growthByService = {};
     for (const [svcName, daily] of Object.entries(serviceDaily)) {
       const months = {};
       for (const [dt, cost] of Object.entries(daily)) {
@@ -226,20 +279,26 @@ module.exports = async function (context, req) {
       }
       const sorted = Object.entries(months).sort((a, b) => a[0].localeCompare(b[0]));
       if (sorted.length < 3) continue;
-      let streak = 0, maxStreak = 0;
-      for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i][1] > sorted[i - 1][1] * 1.05) { streak++; maxStreak = Math.max(maxStreak, streak); }
-        else streak = 0;
-      }
-      if (maxStreak >= 2) {
-        const first = sorted[sorted.length - maxStreak - 1][1];
-        const last = sorted[sorted.length - 1][1];
-        const totalPct = first > 0 ? Math.round(((last - first) / first) * 100) : null;
-        monthlyByService[svcName] = { months: maxStreak + 1, totalPct, from: sorted[sorted.length - maxStreak - 1][0], to: sorted[sorted.length - 1][0] };
-      }
+      const values = sorted.map(e => e[1]);
+      const mk = mannKendall(values);
+      if (!mk.significant || mk.tau <= 0) continue;
+      const fit = polyFit(values);
+      const totalPct = values[0] > 0 ? Math.round(((values[values.length - 1] - values[0]) / values[0]) * 100) : null;
+      const level = mk.tau >= 0.8 || fit.acceleration > 0 ? 'high' : mk.tau >= 0.5 ? 'medium' : 'low';
+      growthByService[svcName] = {
+        months: sorted.length,
+        from: sorted[0][0],
+        to: sorted[sorted.length - 1][0],
+        totalPct,
+        tau: Math.round(mk.tau * 100) / 100,
+        slope: Math.round(fit.slope * 100) / 100,
+        acceleration: Math.round(fit.acceleration * 100) / 100,
+        accelerating: fit.acceleration > 0.5,
+        level
+      };
     }
     for (const svc of serviceBreakdown) {
-      if (monthlyByService[svc.service]) svc.growthWarning = monthlyByService[svc.service];
+      if (growthByService[svc.service]) svc.growthWarning = growthByService[svc.service];
     }
 
     // _key was only needed to look up the per-meter series

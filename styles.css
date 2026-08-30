@@ -278,6 +278,12 @@ h1 {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
 }
+.growth-warning-high {
+    color: #ff5252;
+    background: rgba(255, 82, 82, 0.15);
+    border-color: rgba(255, 82, 82, 0.6);
+    animation: pulse-warn 1.2s ease-in-out infinite;
+}
 .service-filter-btn { cursor: pointer; font-size: 0.65rem; color: #666; margin-left: 6px; vertical-align: middle; }
 .service-filter-btn:hover { color: #4fc3f7; }
 .service-link {
