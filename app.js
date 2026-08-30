@@ -460,12 +460,13 @@ function renderTable(serviceBreakdown) {
     // Flatten to rows: one row per resource
     let rows = [];
     for (const svc of serviceBreakdown) {
+        const gw = svc.growthWarning || null;
         if (svc.resources && svc.resources.length > 0) {
             for (const r of svc.resources) {
-                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records, trend: r.trend || null, quantity: r.quantity || 0 });
+                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records, trend: r.trend || null, quantity: r.quantity || 0, growthWarning: gw });
             }
         } else {
-            rows.push({ service: svc.service, resource: '—', resourceName: '', cost: svc.cost, records: svc.records, trend: svc.trend || null, quantity: 0 });
+            rows.push({ service: svc.service, resource: '—', resourceName: '', cost: svc.cost, records: svc.records, trend: svc.trend || null, quantity: 0, growthWarning: gw });
         }
     }
 
@@ -479,15 +480,21 @@ function renderTable(serviceBreakdown) {
         return a[key].localeCompare(b[key]) * dir;
     });
 
+    const shownGrowthWarning = new Set();
     tbody.innerHTML = rows.map(r => {
         const portalUrl = getPortalUrl(r.service);
         const svcHtml = portalUrl
             ? `<a class="service-link" href="${portalUrl}" target="_blank">${r.service}</a>`
             : r.service;
         const clickable = r.resource !== '—' ? 'class="resource-clickable-row"' : 'class="service-clickable-row"';
+        let gwHtml = '';
+        if (r.growthWarning && !shownGrowthWarning.has(r.service)) {
+            gwHtml = buildGrowthWarningBadge(r.growthWarning);
+            shownGrowthWarning.add(r.service);
+        }
         return `
         <tr ${clickable} data-service="${r.service}" data-resource="${r.resource}">
-            <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${svcHtml}</td>
+            <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${svcHtml}${gwHtml}</td>
             <td>${r.resource}</td>
             <td class="mapped-resource-cell">${r.resourceName}</td>
             <td>${formatCost(r.cost)}</td>
