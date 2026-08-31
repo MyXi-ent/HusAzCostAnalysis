@@ -270,75 +270,62 @@ module.exports = async function (context, req) {
       return { slope, acceleration: coeff[2], intercept: coeff[0] };
     }
 
-    const growthByService = {};
-    for (const [svcName, daily] of Object.entries(serviceDaily)) {
+    function computeGrowth(daily) {
       const months = {};
       for (const [dt, cost] of Object.entries(daily)) {
         const m = dt.substring(0, 7);
         months[m] = (months[m] || 0) + cost;
       }
       const sorted = Object.entries(months).sort((a, b) => a[0].localeCompare(b[0]));
-      if (sorted.length < 3) continue;
+      if (sorted.length < 3) return null;
       const values = sorted.map(e => e[1]);
       const mk = mannKendall(values);
-      if (!mk.significant || mk.tau <= 0) continue;
+      if (!mk.significant || mk.tau <= 0) return null;
       const fit = polyFit(values);
       const totalPct = values[0] > 0 ? Math.round(((values[values.length - 1] - values[0]) / values[0]) * 100) : null;
-      const mean = values.reduce((a, b) => a + b, 0) / values.length;
 
-      // Exponential fit on ALL months (floor at $0.01 so zeros don't get excluded)
       const logVals = values.map(v => Math.log(Math.max(v, 0.01)));
       let expRate = null, expR2 = 0;
-      {
-        const n = logVals.length;
-        const idx = logVals.map((_, i) => i);
-        const sx = idx.reduce((a, b) => a + b, 0);
-        const sy = logVals.reduce((a, b) => a + b, 0);
-        const sxx = idx.reduce((a, x) => a + x * x, 0);
-        const sxy = idx.reduce((a, x, i) => a + x * logVals[i], 0);
-        const denom = n * sxx - sx * sx;
-        if (denom > 0) {
-          const m = (n * sxy - sx * sy) / denom;
-          const b = (sy - m * sx) / n;
-          expRate = (Math.exp(m) - 1) * 100;
-          const predicted = idx.map(x => m * x + b);
-          const meanY = sy / n;
-          const ssTot = logVals.reduce((a, y) => a + (y - meanY) ** 2, 0);
-          const ssRes = logVals.reduce((a, y, i) => a + (y - predicted[i]) ** 2, 0);
-          expR2 = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
-        }
+      const n = logVals.length;
+      const idx = logVals.map((_, i) => i);
+      const sx = idx.reduce((a, b) => a + b, 0);
+      const sy = logVals.reduce((a, b) => a + b, 0);
+      const sxx = idx.reduce((a, x) => a + x * x, 0);
+      const sxy = idx.reduce((a, x, i) => a + x * logVals[i], 0);
+      const denom = n * sxx - sx * sx;
+      if (denom > 0) {
+        const m = (n * sxy - sx * sy) / denom;
+        const b = (sy - m * sx) / n;
+        expRate = (Math.exp(m) - 1) * 100;
+        const predicted = idx.map(x => m * x + b);
+        const meanY = sy / n;
+        const ssTot = logVals.reduce((a, y) => a + (y - meanY) ** 2, 0);
+        const ssRes = logVals.reduce((a, y, i) => a + (y - predicted[i]) ** 2, 0);
+        expR2 = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
       }
 
-      // Monotonicity ratio: fraction of months where cost increased over previous
       let increases = 0;
       for (let i = 1; i < values.length; i++) if (values[i] > values[i - 1]) increases++;
       const monoRatio = increases / (values.length - 1);
-
-      // Score: R² of exponential fit (0-100). High = consistent exponential growth.
-      // Volatile spikes destroy R² because log(0.01)→log(500) creates huge residuals.
       const score = Math.round(expR2 * 100);
-      const level = score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low';
-      growthByService[svcName] = {
-        months: sorted.length,
-        from: sorted[0][0],
-        to: sorted[sorted.length - 1][0],
-        totalPct,
-        tau: Math.round(mk.tau * 100) / 100,
-        slope: Math.round(fit.slope * 100) / 100,
+      return {
+        months: sorted.length, from: sorted[0][0], to: sorted[sorted.length - 1][0], totalPct,
+        tau: Math.round(mk.tau * 100) / 100, slope: Math.round(fit.slope * 100) / 100,
         acceleration: Math.round(fit.acceleration * 100) / 100,
-        expRate: expRate !== null ? Math.round(expRate) : null,
-        expR2: Math.round(expR2 * 100),
-        monoRatio: Math.round(monoRatio * 100),
-        score,
+        expRate: expRate !== null ? Math.round(expRate) : null, expR2: Math.round(expR2 * 100),
+        monoRatio: Math.round(monoRatio * 100), score,
         accelerating: fit.acceleration > 0.5,
-        level
+        level: score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low'
       };
     }
+
     for (const svc of serviceBreakdown) {
-      if (growthByService[svc.service]) svc.growthWarning = growthByService[svc.service];
+      svc.growthWarning = computeGrowth(serviceDaily[svc.service] || {});
+      for (const r of svc.resources) {
+        r.growthWarning = computeGrowth(resourceDaily[`${svc.service}\u0000${r._key}`] || {});
+      }
     }
 
-    // _key was only needed to look up the per-meter series
     for (const svc of serviceBreakdown) for (const r of svc.resources) delete r._key;
 
     // totalCost reflects the filtered view (dailyTotals sum)

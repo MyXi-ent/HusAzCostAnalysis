@@ -463,7 +463,7 @@ function renderTable(serviceBreakdown) {
         const gw = svc.growthWarning || null;
         if (svc.resources && svc.resources.length > 0) {
             for (const r of svc.resources) {
-                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records, trend: r.trend || null, quantity: r.quantity || 0, growthWarning: gw });
+                rows.push({ service: svc.service, resource: r.name, resourceName: r.resourceName || '', cost: r.cost, records: r.records, trend: r.trend || null, quantity: r.quantity || 0, growthWarning: r.growthWarning || gw });
             }
         } else {
             rows.push({ service: svc.service, resource: '—', resourceName: '', cost: svc.cost, records: svc.records, trend: svc.trend || null, quantity: 0, growthWarning: gw });
