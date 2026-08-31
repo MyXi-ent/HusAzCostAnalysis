@@ -477,29 +477,25 @@ function renderTable(serviceBreakdown) {
         if (key === 'cost' || key === 'records') return (a[key] - b[key]) * dir;
         // Sort by dollar-per-day change, so the biggest movers surface first
         if (key === 'trend') return ((a.trend?.delta ?? 0) - (b.trend?.delta ?? 0)) * dir;
+        if (key === 'growth') return ((a.growthWarning?.tau ?? 0) - (b.growthWarning?.tau ?? 0)) * dir;
         return a[key].localeCompare(b[key]) * dir;
     });
 
-    const shownGrowthWarning = new Set();
     tbody.innerHTML = rows.map(r => {
         const portalUrl = getPortalUrl(r.service);
         const svcHtml = portalUrl
             ? `<a class="service-link" href="${portalUrl}" target="_blank">${r.service}</a>`
             : r.service;
         const clickable = r.resource !== '—' ? 'class="resource-clickable-row"' : 'class="service-clickable-row"';
-        let gwHtml = '';
-        if (r.growthWarning && !shownGrowthWarning.has(r.service)) {
-            gwHtml = buildGrowthWarningBadge(r.growthWarning);
-            shownGrowthWarning.add(r.service);
-        }
         return `
         <tr ${clickable} data-service="${r.service}" data-resource="${r.resource}">
-            <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${svcHtml}${gwHtml}</td>
+            <td><img src="${getIconPath(r.service)}" class="table-icon" onerror="this.src='icons/azure-monitor.svg'">${svcHtml}</td>
             <td>${r.resource}</td>
             <td class="mapped-resource-cell">${r.resourceName}</td>
             <td>${formatCost(r.cost)}</td>
             <td class="qty-cell">${r.quantity ? formatQuantity(r.quantity, r.resource) : ''}</td>
             <td class="trend-cell">${buildAnomalyBadge(r.trend)}</td>
+            <td class="trend-cell">${buildGrowthWarningBadge(r.growthWarning)}</td>
             <td>${r.records}</td>
         </tr>`;
     }).join('');
