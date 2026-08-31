@@ -179,6 +179,8 @@ async function fetchCostData(token, subscriptionId, startDate, endDate) {
   });
 
   let nextLink = `/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2026-06-01`;
+  let retries429 = 0;
+  const MAX_429_RETRIES = 5;
 
   while (nextLink) {
     const isFullUrl = nextLink.startsWith("https://");
@@ -192,11 +194,14 @@ async function fetchCostData(token, subscriptionId, startDate, endDate) {
     });
 
     if (res.status === 429) {
+      retries429++;
+      if (retries429 > MAX_429_RETRIES) throw new Error(`Cost API 429 after ${MAX_429_RETRIES} retries — rate limit not clearing`);
       const retryAfter = parseInt(res.headers?.["retry-after"] || res.headers?.["x-ms-ratelimit-microsoft.consumption-retry-after"] || "60", 10);
-      console.warn(`Cost API 429 — retrying in ${retryAfter}s`);
+      console.warn(`Cost API 429 — retry ${retries429}/${MAX_429_RETRIES} in ${retryAfter}s`);
       await new Promise((r) => setTimeout(r, retryAfter * 1000));
       continue;
     }
+    retries429 = 0;
     if (res.status !== 200) {
       throw new Error(`Cost API ${res.status}: ${JSON.stringify(res.body).substring(0, 300)}`);
     }
