@@ -137,13 +137,13 @@ function buildAnomalyBadge(trend) {
 function buildGrowthWarningBadge(growthWarning) {
     if (!growthWarning) return '';
     const w = growthWarning;
-    const pctLabel = w.totalPct !== null ? ` (+${w.totalPct}%)` : '';
-    const accelNote = w.accelerating ? ' — ACCELERATING' : '';
-    const title = `Statistically significant rising trend over ${w.months} months (${w.from} → ${w.to})${pctLabel}\n` +
-        `Mann-Kendall τ=${w.tau} | Slope: $${w.slope}/mo | Acceleration: $${w.acceleration}/mo²${accelNote}`;
+    const pctLabel = w.totalPct !== null ? ` (+${w.totalPct}% total)` : '';
+    const title = `${w.months} months (${w.from} → ${w.to})${pctLabel}\n` +
+        `Mann-Kendall τ=${w.tau} | Slope: +$${w.slope}/mo | Accel: $${w.acceleration}/mo²`;
     const icon = w.accelerating ? '🔺' : '⚠';
     const cls = w.level === 'high' ? 'growth-warning-badge growth-warning-high' : 'growth-warning-badge';
-    return `<span class="${cls}" title="${title}">${icon} Rising ${w.months}mo</span>`;
+    const num = w.accelerating ? `+$${w.acceleration}/mo²` : `+$${w.slope}/mo`;
+    return `<span class="${cls}" title="${title}">${icon} ${num}</span>`;
 }
 
 // Combines the trends of several services into one for a resource group
