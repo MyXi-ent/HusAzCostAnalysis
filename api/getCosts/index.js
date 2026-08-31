@@ -285,13 +285,39 @@ module.exports = async function (context, req) {
       const fit = polyFit(values);
       const totalPct = values[0] > 0 ? Math.round(((values[values.length - 1] - values[0]) / values[0]) * 100) : null;
       const mean = values.reduce((a, b) => a + b, 0) / values.length;
-      // Compound monthly growth rate: (last/first)^(1/(n-1)) - 1
-      const cmgr = values[0] > 0.01 && values[values.length - 1] > 0
-        ? (Math.pow(values[values.length - 1] / values[0], 1 / (values.length - 1)) - 1) * 100
-        : null;
-      // Relative acceleration: % of mean cost per month²
-      const relAccel = mean > 0.01 ? (fit.acceleration / mean) * 100 : 0;
-      const level = mk.tau >= 0.8 || fit.acceleration > 0 ? 'high' : mk.tau >= 0.5 ? 'medium' : 'low';
+
+      // Exponential fit on ALL months (floor at $0.01 so zeros don't get excluded)
+      const logVals = values.map(v => Math.log(Math.max(v, 0.01)));
+      let expRate = null, expR2 = 0;
+      {
+        const n = logVals.length;
+        const idx = logVals.map((_, i) => i);
+        const sx = idx.reduce((a, b) => a + b, 0);
+        const sy = logVals.reduce((a, b) => a + b, 0);
+        const sxx = idx.reduce((a, x) => a + x * x, 0);
+        const sxy = idx.reduce((a, x, i) => a + x * logVals[i], 0);
+        const denom = n * sxx - sx * sx;
+        if (denom > 0) {
+          const m = (n * sxy - sx * sy) / denom;
+          const b = (sy - m * sx) / n;
+          expRate = (Math.exp(m) - 1) * 100;
+          const predicted = idx.map(x => m * x + b);
+          const meanY = sy / n;
+          const ssTot = logVals.reduce((a, y) => a + (y - meanY) ** 2, 0);
+          const ssRes = logVals.reduce((a, y, i) => a + (y - predicted[i]) ** 2, 0);
+          expR2 = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
+        }
+      }
+
+      // Monotonicity ratio: fraction of months where cost increased over previous
+      let increases = 0;
+      for (let i = 1; i < values.length; i++) if (values[i] > values[i - 1]) increases++;
+      const monoRatio = increases / (values.length - 1);
+
+      // Score: R² of exponential fit (0-100). High = consistent exponential growth.
+      // Volatile spikes destroy R² because log(0.01)→log(500) creates huge residuals.
+      const score = Math.round(expR2 * 100);
+      const level = score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low';
       growthByService[svcName] = {
         months: sorted.length,
         from: sorted[0][0],
@@ -300,8 +326,10 @@ module.exports = async function (context, req) {
         tau: Math.round(mk.tau * 100) / 100,
         slope: Math.round(fit.slope * 100) / 100,
         acceleration: Math.round(fit.acceleration * 100) / 100,
-        cmgr: cmgr !== null ? Math.round(cmgr) : null,
-        relAccel: Math.round(relAccel * 10) / 10,
+        expRate: expRate !== null ? Math.round(expRate) : null,
+        expR2: Math.round(expR2 * 100),
+        monoRatio: Math.round(monoRatio * 100),
+        score,
         accelerating: fit.acceleration > 0.5,
         level
       };

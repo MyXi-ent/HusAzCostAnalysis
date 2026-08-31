@@ -137,13 +137,13 @@ function buildAnomalyBadge(trend) {
 function buildGrowthWarningBadge(growthWarning) {
     if (!growthWarning) return '';
     const w = growthWarning;
-    const title = `${w.months} months (${w.from} → ${w.to}), +${w.totalPct ?? '?'}% total\n` +
-        `τ=${w.tau} | +$${w.slope}/mo | Accel: $${w.acceleration}/mo² (${w.relAccel}% of avg)\n` +
-        `Compound monthly growth: ${w.cmgr ?? '?'}%/mo`;
-    const icon = w.accelerating ? '🔺' : '⚠';
+    const title = `Growth Score: ${w.score} (rate × fit × trend × consistency²)\n` +
+        `Exp growth: ${w.expRate ?? '?'}%/mo, Fit R²: ${w.expR2}%, τ: ${w.tau}, MoM↑: ${w.monoRatio}%\n` +
+        `${w.months}mo (${w.from} → ${w.to}), +${w.totalPct ?? '?'}% total\n` +
+        `Slope: +$${w.slope}/mo, Accel: $${w.acceleration}/mo²`;
+    const icon = w.score >= 70 ? '🔺' : '⚠';
     const cls = w.level === 'high' ? 'growth-warning-badge growth-warning-high' : 'growth-warning-badge';
-    const label = w.cmgr !== null ? `${w.cmgr}%/mo` : `+$${w.slope}/mo`;
-    return `<span class="${cls}" title="${title}">${icon} ${label}</span>`;
+    return `<span class="${cls}" title="${title}">${icon} ${w.score}</span>`;
 }
 
 // Combines the trends of several services into one for a resource group
@@ -477,7 +477,7 @@ function renderTable(serviceBreakdown) {
         if (key === 'cost' || key === 'records') return (a[key] - b[key]) * dir;
         // Sort by dollar-per-day change, so the biggest movers surface first
         if (key === 'trend') return ((a.trend?.delta ?? 0) - (b.trend?.delta ?? 0)) * dir;
-        if (key === 'growth') return ((a.growthWarning?.tau ?? 0) - (b.growthWarning?.tau ?? 0)) * dir;
+        if (key === 'growth') return ((a.growthWarning?.score ?? 0) - (b.growthWarning?.score ?? 0)) * dir;
         return a[key].localeCompare(b[key]) * dir;
     });
 
