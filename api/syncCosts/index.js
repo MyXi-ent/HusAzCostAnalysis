@@ -79,8 +79,8 @@ function httpPost(hostname, path, body, headers) {
       let data = "";
       res.on("data", (c) => (data += c));
       res.on("end", () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
+        try { resolve({ status: res.statusCode, headers: res.headers, body: JSON.parse(data) }); }
+        catch { resolve({ status: res.statusCode, headers: res.headers, body: data }); }
       });
     });
     req.on("error", reject);
@@ -161,7 +161,7 @@ async function fetchCostData(token, subscriptionId, startDate, endDate) {
   const allRows = [];
   const body = JSON.stringify({
     type: "ActualCost",
-    dataSet: {
+    dataset: {
       granularity: "Daily",
       aggregation: {
         totalCost: { name: "Cost", function: "Sum" },
@@ -178,7 +178,7 @@ async function fetchCostData(token, subscriptionId, startDate, endDate) {
     timePeriod: { from: startDate, to: endDate },
   });
 
-  let nextLink = `/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-11-01`;
+  let nextLink = `/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2026-06-01`;
 
   while (nextLink) {
     const isFullUrl = nextLink.startsWith("https://");
@@ -192,7 +192,9 @@ async function fetchCostData(token, subscriptionId, startDate, endDate) {
     });
 
     if (res.status === 429) {
-      await new Promise((r) => setTimeout(r, 30000));
+      const retryAfter = parseInt(res.headers?.["retry-after"] || res.headers?.["x-ms-ratelimit-microsoft.consumption-retry-after"] || "60", 10);
+      console.warn(`Cost API 429 — retrying in ${retryAfter}s`);
+      await new Promise((r) => setTimeout(r, retryAfter * 1000));
       continue;
     }
     if (res.status !== 200) {
