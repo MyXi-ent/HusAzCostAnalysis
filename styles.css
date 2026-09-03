@@ -61,6 +61,16 @@ h1 {
 .btn-secondary { background: #2a3a5c; color: #90caf9; border: 1px solid #3a4a6c; }
 .btn-secondary:hover { background: #3a4a6c; }
 
+.sync-group { display: flex; align-items: center; gap: 4px; }
+.sync-group .btn { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: -4px; }
+.sync-days {
+    background: #2a3a5c; color: #90caf9; border: 1px solid #3a4a6c;
+    border-radius: 0 4px 4px 0; padding: 7px 4px; font-size: 12px; cursor: pointer;
+}
+.sync-days:hover { background: #3a4a6c; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn.syncing #syncIcon { animation: spin 1s linear infinite; transform-origin: 50% 50%; }
+
 .controls {
     display: flex;
     align-items: center;

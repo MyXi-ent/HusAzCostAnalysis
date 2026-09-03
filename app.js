@@ -880,6 +880,48 @@ document.querySelectorAll('.service-table th[data-sort]').forEach(th => {
     });
 });
 
+async function syncCosts() {
+    const btn = document.getElementById('syncBtn');
+    const label = document.getElementById('syncLabel');
+    const days = parseInt(document.getElementById('syncDays').value, 10);
+
+    btn.disabled = true;
+    btn.classList.add('syncing');
+    label.textContent = 'Syncing…';
+    showToast(`Fetching last ${days} days from Azure Cost Management…`, 'info', true);
+
+    try {
+        const res = await fetch('/api/syncCosts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ days })
+        });
+        const text = await res.text();
+        let result;
+        try { result = JSON.parse(text); } catch { throw new Error(text.substring(0, 300) || `HTTP ${res.status}`); }
+        if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+
+        const perSub = (result.subscriptions || [])
+            .map(s => s.error ? `${s.subscription}: failed (${s.error})` : `${s.subscription}: ${s.succeeded}`)
+            .join(' · ');
+        const msg = `✓ Synced ${result.startDate} → ${result.endDate}: ${result.succeeded} records saved`
+            + (result.failed ? `, ${result.failed} failed` : '')
+            + (perSub ? ` — ${perSub}` : '');
+        showToast(msg, result.failed > 0 ? 'warning' : 'success');
+
+        // Cost Management lags ~24h, so re-read whatever range is on screen now.
+        if (currentDateRange) await loadData(currentDateRange.startDate, currentDateRange.endDate);
+    } catch (err) {
+        showToast(`Sync failed: ${err.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('syncing');
+        label.textContent = 'Sync Data';
+    }
+}
+
+document.getElementById('syncBtn').addEventListener('click', syncCosts);
+
 document.getElementById('uploadBtn').addEventListener('click', () => {
     document.getElementById('fileInput').click();
 });
