@@ -7,55 +7,59 @@ on:
   workflow_dispatch:
     inputs:
       days:
-        description: 'Number of days to sync (default 2, max 30)'
+        description: 'Number of days to sync (default 5, max 30)'
         required: false
-        default: '2'
+        default: '5'
       backfill_start:
-        description: 'Backfill start date (YYYY-MM-DD). Syncs in 2-day chunks to avoid timeout.'
+        description: 'Backfill start date (YYYY-MM-DD)'
         required: false
       backfill_end:
         description: 'Backfill end date (YYYY-MM-DD). Required if backfill_start is set.'
         required: false
 
+concurrency:
+  group: cost-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
-    steps:
-      - name: Trigger cost sync
-        run: |
-          API_URL="https://delightful-sea-0fa91060f.7.azurestaticapps.net/api/syncCosts"
-          BACKFILL_START="${{ github.event.inputs.backfill_start }}"
-          BACKFILL_END="${{ github.event.inputs.backfill_end }}"
 
+    # One subscription per job, run one at a time. The Cost Management API
+    # throttles aggressively and answers 429 with `Retry-After: 60`, so the
+    # calls have to be spread out rather than issued back to back.
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        subscription:
+          - Xi_Sponsored_Subscription
+          - Xi_Sponsored_2
+          - Xi_Sponsored_3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync ${{ matrix.subscription }}
+        env:
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTIONS: ${{ secrets.ARM_SUBSCRIPTIONS }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          SUBSCRIPTION: ${{ matrix.subscription }}
+          BACKFILL_START: ${{ inputs.backfill_start }}
+          BACKFILL_END: ${{ inputs.backfill_end }}
+          DAYS: ${{ inputs.days || '5' }}
+        run: |
+          set -euo pipefail
           if [ -n "$BACKFILL_START" ] && [ -n "$BACKFILL_END" ]; then
-            echo "Backfilling $BACKFILL_START to $BACKFILL_END in 2-day chunks"
-            current="$BACKFILL_START"
-            while [ "$current" \< "$BACKFILL_END" ] || [ "$current" = "$BACKFILL_END" ]; do
-              chunk_end=$(date -u -d "$current + 1 day" +%Y-%m-%d)
-              if [ "$chunk_end" \> "$BACKFILL_END" ]; then chunk_end="$BACKFILL_END"; fi
-              echo "Syncing $current to $chunk_end..."
-              response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
-                -H "Content-Type: application/json" \
-                -d "{\"startDate\": \"$current\", \"endDate\": \"$chunk_end\"}")
-              http_code=$(echo "$response" | tail -1)
-              body=$(echo "$response" | sed '$d')
-              echo "  HTTP $http_code: $body"
-              if [ "$http_code" -ne 200 ]; then
-                echo "::warning::Chunk $current to $chunk_end failed with $http_code"
-              fi
-              current=$(date -u -d "$chunk_end + 1 day" +%Y-%m-%d)
-            done
+            node scripts/sync-costs.js --subscription "$SUBSCRIPTION" \
+              --start "$BACKFILL_START" --end "$BACKFILL_END"
           else
-            DAYS=${{ github.event.inputs.days || '2' }}
-            response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
-              -H "Content-Type: application/json" \
-              -d "{\"days\": $DAYS}")
-            http_code=$(echo "$response" | tail -1)
-            body=$(echo "$response" | sed '$d')
-            echo "HTTP Status: $http_code"
-            echo "Response: $body"
-            if [ "$http_code" -ne 200 ]; then
-              echo "::error::Sync failed with status $http_code"
-              exit 1
-            fi
+            node scripts/sync-costs.js --subscription "$SUBSCRIPTION" --days "$DAYS"
           fi
