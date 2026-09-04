@@ -157,7 +157,7 @@ async function upsertDoc(doc) {
 }
 
 // ─── Fetch Cost Data (Cost Management Query API) ─────────────────────────────
-async function fetchCostData(token, subscriptionId, startDate, endDate) {
+async function fetchCostData(getToken, subscriptionId, startDate, endDate) {
   const allRows = [];
   const body = JSON.stringify({
     type: "ActualCost",
@@ -180,6 +180,7 @@ async function fetchCostData(token, subscriptionId, startDate, endDate) {
 
   let nextLink = `/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2026-06-01`;
   let retries429 = 0;
+  let tokenRefreshes = 0;
   // Cost Management advertises Retry-After: 60 but the throttle window is far
   // longer in practice, so honour the header as a floor and back off beyond it.
   const MAX_429_RETRIES = parseInt(process.env.COST_API_MAX_RETRIES || "20", 10);
@@ -191,10 +192,18 @@ async function fetchCostData(token, subscriptionId, startDate, endDate) {
     const path = isFullUrl ? nextLink.replace(`https://${hostname}`, "") : nextLink;
 
     let res = await httpPost(hostname, path, body, {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${await getToken()}`,
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(body),
     });
+
+    // A long throttle backoff can outlive the token, so mint a new one and retry.
+    if (res.status === 401 && JSON.stringify(res.body).includes("ExpiredAuthenticationToken")) {
+      if (++tokenRefreshes > 5) throw new Error("ARM token kept expiring — giving up");
+      console.warn("ARM token expired during backoff — refreshing");
+      await getToken(true);
+      continue;
+    }
 
     if (res.status === 429) {
       retries429++;
@@ -282,10 +291,13 @@ module.exports = async function (context, req) {
 
   context.log(`Fetching ${startDate} to ${endDate} for ${subscriptions.length} subscription(s)`);
 
-  // One token per credential set, shared by every subscription using it
+  // One token per credential set, shared by every subscription using it.
+  // Throttle backoff can outlast the hour-long token lifetime, so callers can
+  // force a refresh after an ExpiredAuthenticationToken.
   const tokenCache = new Map();
-  async function tokenFor(cred) {
+  async function tokenFor(cred, forceRefresh) {
     const key = cred || "default";
+    if (forceRefresh) tokenCache.delete(key);
     if (!tokenCache.has(key)) tokenCache.set(key, await getArmToken(cred));
     return tokenCache.get(key);
   }
@@ -299,8 +311,7 @@ module.exports = async function (context, req) {
   // A failure on one subscription must not abort the others
   for (const sub of subscriptions) {
     try {
-      const token = await tokenFor(sub.cred);
-      const rows = await fetchCostData(token, sub.id, startDate, endDate);
+      const rows = await fetchCostData((force) => tokenFor(sub.cred, force), sub.id, startDate, endDate);
       context.log(`${sub.name}: fetched ${rows.length} rows`);
       totalFetched += rows.length;
 
