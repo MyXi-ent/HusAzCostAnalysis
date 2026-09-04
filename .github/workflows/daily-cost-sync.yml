@@ -24,6 +24,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
 
     # One subscription per job, run one at a time. The Cost Management API
     # throttles aggressively and answers 429 with `Retry-After: 60`, so the
