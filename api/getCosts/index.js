@@ -331,6 +331,21 @@ module.exports = async function (context, req) {
     // totalCost reflects the filtered view (dailyTotals sum)
     const totalCost = Math.round(dailyTotals.reduce((s, d) => s + d.cost, 0) * 100) / 100;
 
+    let lastSync = null;
+    try {
+      const markers = await cosmosQuery(
+        "SELECT c.SubscriptionName, c.LastSyncAt, c.LastSyncEnd FROM c WHERE c.ServiceName = '_SyncMeta'"
+      );
+      const subs = markers
+        .filter((m) => m.LastSyncAt)
+        .sort((a, b) => (a.LastSyncAt < b.LastSyncAt ? 1 : -1));
+      if (subs.length) {
+        lastSync = { at: subs[0].LastSyncAt, through: subs[0].LastSyncEnd, subscriptions: subs };
+      }
+    } catch (err) {
+      context.log.warn('Could not read sync markers', err.message);
+    }
+
     context.log(`Query returned ${docs.length} documents, total cost: $${totalCost}`);
     context.res = {
       status: 200,
@@ -340,6 +355,7 @@ module.exports = async function (context, req) {
         dailyTotals,
         serviceBreakdown,
         totalCost,
+        lastSync,
         trendWindow: { recentDays: recentDates.length, priorDays: priorDates.length }
       }
     };

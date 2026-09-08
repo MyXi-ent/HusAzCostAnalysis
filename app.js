@@ -689,9 +689,32 @@ function refreshView() {
     }
 }
 
+function renderLastSync(lastSync) {
+    const el = document.getElementById('syncInfo');
+    if (!el) return;
+    if (!lastSync || !lastSync.at) {
+        el.innerHTML = '<span class="sync-stale">Last sync: unknown</span>';
+        el.title = 'No successful sync has been recorded yet.';
+        return;
+    }
+    const at = new Date(lastSync.at);
+    const cairo = at.toLocaleString('en-US', {
+        timeZone: 'Africa/Cairo', day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true
+    });
+    const hoursAgo = (Date.now() - at.getTime()) / 3600000;
+    const cls = hoursAgo > 36 ? 'sync-stale' : 'sync-ok';
+    el.innerHTML = `Last sync<br><span class="${cls}">${cairo} (Cairo)</span>`;
+    const per = (lastSync.subscriptions || [])
+        .map(s => `${s.SubscriptionName}: ${new Date(s.LastSyncAt).toLocaleString('en-US', { timeZone: 'Africa/Cairo', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}`)
+        .join('\n');
+    el.title = `Data current through ${lastSync.through || 'unknown'}\n${per}`;
+}
+
 function renderData(data, source) {
     currentData = data;
     document.querySelector('.total-value').textContent = formatCost(data.totalCost);
+    renderLastSync(data.lastSync);
     if (data.dateRange) {
         const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
         document.getElementById('dateRangeValue').textContent = `${fmt(data.dateRange.startDate)} — ${fmt(data.dateRange.endDate)}`;

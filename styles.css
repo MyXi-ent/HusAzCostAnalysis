@@ -44,6 +44,10 @@ h1 {
 .sign-out-link:hover { text-decoration: underline; }
 .build-info { font-size: 0.7rem; color: #666; margin-left: 12px; padding-left: 12px; border-left: 1px solid #2a3a5c; line-height: 1.4; }
 
+.sync-info { font-size: 0.7rem; color: #666; margin-left: 12px; padding-left: 12px; border-left: 1px solid #2a3a5c; line-height: 1.4; white-space: nowrap; }
+.sync-info .sync-ok { color: #4ade80; }
+.sync-info .sync-stale { color: #f87171; }
+
 .btn {
     display: inline-flex;
     align-items: center;

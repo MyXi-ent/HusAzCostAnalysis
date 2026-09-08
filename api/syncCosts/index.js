@@ -31,6 +31,14 @@
 const https = require("https");
 const crypto = require("crypto");
 
+// Identifies this caller to Cost Management so it gets its own throttling bucket.
+const COST_API_CLIENT_TYPE = process.env.COST_API_CLIENT_TYPE || "HusAzCostAnalysis";
+
+// Partition holding the per-subscription "last successful sync" markers. Their
+// Date is epoch so they never fall inside a real reporting range.
+const SYNC_META_SERVICE = "_SyncMeta";
+const SYNC_META_DATE = "1970-01-01T00:00:00";
+
 // ─── Azure ARM Auth ───────────────────────────────────────────────────────────
 // Credentials default to the ARM_* vars. A subscription may name an alternate
 // credential set via `cred`, resolving to ARM_<CRED>_TENANT_ID / _CLIENT_ID /
@@ -181,19 +189,23 @@ async function fetchCostData(getToken, subscriptionId, startDate, endDate) {
   let nextLink = `/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2026-06-01`;
   let retries429 = 0;
   let tokenRefreshes = 0;
-  // Cost Management advertises Retry-After: 60 but the throttle window is far
-  // longer in practice, so honour the header as a floor and back off beyond it.
+  // Cost Management returns its wait time in seconds on a ClientType-specific
+  // header; it is typically 1-30s, so honour it rather than backing off blindly.
   const MAX_429_RETRIES = parseInt(process.env.COST_API_MAX_RETRIES || "20", 10);
-  const MAX_BACKOFF_SECONDS = 300;
+  const MAX_BACKOFF_SECONDS = 60;
 
   while (nextLink) {
     const isFullUrl = nextLink.startsWith("https://");
     const hostname = isFullUrl ? new URL(nextLink).hostname : "management.azure.com";
     const path = isFullUrl ? nextLink.replace(`https://${hostname}`, "") : nextLink;
 
+    // Without a ClientType the request lands in the shared `DefaultQuota` bucket,
+    // which sits permanently at 0 remaining and 429s every call.
     let res = await httpPost(hostname, path, body, {
       Authorization: `Bearer ${await getToken()}`,
       "Content-Type": "application/json",
+      ClientType: COST_API_CLIENT_TYPE,
+      "x-ms-command-name": `${COST_API_CLIENT_TYPE}.sync`,
       "Content-Length": Buffer.byteLength(body),
     });
 
@@ -208,8 +220,13 @@ async function fetchCostData(getToken, subscriptionId, startDate, endDate) {
     if (res.status === 429) {
       retries429++;
       if (retries429 > MAX_429_RETRIES) throw new Error(`Cost API 429 after ${MAX_429_RETRIES} retries — rate limit not clearing`);
-      const retryAfter = parseInt(res.headers?.["retry-after"] || res.headers?.["x-ms-ratelimit-microsoft.consumption-retry-after"] || "60", 10);
-      const wait = Math.min(Math.max(retryAfter, 30 * 2 ** (retries429 - 1)), MAX_BACKOFF_SECONDS);
+      const retryAfter = parseInt(
+        res.headers?.["x-ms-ratelimit-microsoft.costmanagement-clienttype-retry-after"] ||
+        res.headers?.["x-ms-ratelimit-microsoft.costmanagement-entity-retry-after"] ||
+        res.headers?.["x-ms-ratelimit-microsoft.costmanagement-tenant-retry-after"] ||
+        res.headers?.["retry-after"] ||
+        "5", 10);
+      const wait = Math.min(Math.max(retryAfter, 2), MAX_BACKOFF_SECONDS);
       console.warn(`Cost API 429 — retry ${retries429}/${MAX_429_RETRIES} in ${wait}s`);
       await new Promise((r) => setTimeout(r, wait * 1000));
       continue;
@@ -346,6 +363,26 @@ module.exports = async function (context, req) {
       totalFailed += failed;
       context.log(`${sub.name}: ${succeeded} ok, ${failed} failed`);
       results.push({ subscription: sub.name, fetched: rows.length, succeeded, failed, errors });
+
+      if (failed === 0) {
+        try {
+          await upsertDoc({
+            id: `syncmeta-${sub.id}`,
+            Date: SYNC_META_DATE,
+            ServiceName: SYNC_META_SERVICE,
+            SubscriptionName: sub.name,
+            SubscriptionGuid: sub.id,
+            LastSyncAt: new Date().toISOString(),
+            LastSyncStart: startDate,
+            LastSyncEnd: endDate,
+            LastSyncRows: succeeded,
+            Cost: 0,
+            Quantity: 0,
+          });
+        } catch (err) {
+          context.log.warn(`${sub.name}: could not record sync marker: ${err.message}`);
+        }
+      }
     } catch (err) {
       context.log.error(`${sub.name} failed:`, err.message);
       results.push({ subscription: sub.name, error: err.message });
