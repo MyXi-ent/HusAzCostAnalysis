@@ -106,6 +106,7 @@ let currentSort = { key: 'cost', dir: 'desc' };
 let resourceData = null;
 let currentResourceFilter = null; // { service, resource }
 let currentDateRange = { startDate: null, endDate: null };
+let currentSubscription = null; // null = all subscriptions
 
 // GitHub Marketplace billing customer ID → GitHub username mapping
 const GITHUB_CUSTOMER_MAP = {
@@ -276,6 +277,7 @@ async function fetchCostData(startDate, endDate, filter) {
         url += `&service=${encodeURIComponent(filter.service)}`;
         if (filter.resource) url += `&resource=${encodeURIComponent(filter.resource)}`;
     }
+    if (currentSubscription) url += `&subscription=${encodeURIComponent(currentSubscription)}`;
     const resp = await fetch(url);
     if (!resp.ok) {
         const text = await resp.text();
@@ -711,10 +713,50 @@ function renderLastSync(lastSync) {
     el.title = `Data current through ${lastSync.through || 'unknown'}\n${per}`;
 }
 
+function shortSubName(name) {
+    return name.replace(/^Xi_/, '').replace(/_/g, ' ');
+}
+
+function renderSubscriptions(subscriptions) {
+    const group = document.getElementById('subscriptionButtons');
+    const badge = document.getElementById('subscriptionBadge');
+    if (!group) return;
+
+    const subs = (subscriptions || []).slice();
+    // Keep the active button present even when the current range holds no rows for it.
+    if (currentSubscription && !subs.some(s => s.name === currentSubscription)) {
+        subs.push({ name: currentSubscription, cost: 0, records: 0 });
+    }
+    const grandTotal = (subscriptions || []).reduce((sum, s) => sum + s.cost, 0);
+
+    group.innerHTML = '';
+    const addBtn = (name, label, cost) => {
+        const btn = document.createElement('button');
+        btn.className = 'sub-btn' + (currentSubscription === name ? ' active' : '');
+        btn.title = name ? `Show only ${name}` : 'Show all subscriptions';
+        btn.innerHTML = `<span class="sub-btn-name"></span><span class="sub-btn-cost"></span>`;
+        btn.querySelector('.sub-btn-name').textContent = label;
+        btn.querySelector('.sub-btn-cost').textContent = formatCost(cost);
+        btn.addEventListener('click', () => {
+            if (currentSubscription === name) return;
+            currentSubscription = name;
+            loadData(currentDateRange.startDate, currentDateRange.endDate);
+        });
+        group.appendChild(btn);
+    };
+
+    addBtn(null, 'All', grandTotal);
+    for (const s of subs) addBtn(s.name, shortSubName(s.name), s.cost);
+
+    document.getElementById('subscriptionFilter').style.display = subs.length > 1 ? 'flex' : 'none';
+    if (badge) badge.textContent = currentSubscription || 'All Subscriptions';
+}
+
 function renderData(data, source) {
     currentData = data;
     document.querySelector('.total-value').textContent = formatCost(data.totalCost);
     renderLastSync(data.lastSync);
+    renderSubscriptions(data.subscriptions);
     if (data.dateRange) {
         const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
         document.getElementById('dateRangeValue').textContent = `${fmt(data.dateRange.startDate)} — ${fmt(data.dateRange.endDate)}`;

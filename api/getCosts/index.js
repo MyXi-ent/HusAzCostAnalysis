@@ -84,6 +84,7 @@ module.exports = async function (context, req) {
   const endDate = req.query.endDate || req.body?.endDate;
   const filterService = req.query.service || null;
   const filterResource = req.query.resource || null;
+  const filterSubscription = req.query.subscription || null;
   const groupBy = req.query.groupBy || 'day';
 
   if (!startDate || !endDate) {
@@ -95,7 +96,7 @@ module.exports = async function (context, req) {
   context.log(`Querying Cosmos DB for range: ${startDate} to ${endDate}, filter: ${filterService}/${filterResource}`);
   try {
     const docs = await cosmosQuery(
-      "SELECT c.Date, c.ServiceName, c.ServiceResource, c.Cost, c.Quantity, c.ResourceName FROM c WHERE c.Date >= @start AND c.Date <= @end",
+      "SELECT c.Date, c.ServiceName, c.ServiceResource, c.Cost, c.Quantity, c.ResourceName, c.SubscriptionName FROM c WHERE c.Date >= @start AND c.Date <= @end",
       [{ name: "@start", value: `${startDate}T00:00:00` }, { name: "@end", value: `${endDate}T00:00:00` }]
     );
 
@@ -104,7 +105,14 @@ module.exports = async function (context, req) {
     const serviceDaily = {};   // ServiceName -> { date -> cost }  (for anomaly detection)
     const resourceDaily = {};  // "ServiceName\0resKey" -> { date -> cost }
     const allDates = new Set();
+    const subscriptionTotals = {}; // built from every doc, so the picker keeps all options while filtered
     for (const d of docs) {
+      const subscription = d.SubscriptionName || 'Unknown';
+      if (!subscriptionTotals[subscription]) subscriptionTotals[subscription] = { cost: 0, records: 0 };
+      subscriptionTotals[subscription].cost += d.Cost;
+      subscriptionTotals[subscription].records++;
+      if (filterSubscription && subscription !== filterSubscription) continue;
+
       const date = d.Date.split('T')[0];
       const res = d.ServiceResource || 'Other';
       const resourceName = d.ResourceName || '';
@@ -346,6 +354,10 @@ module.exports = async function (context, req) {
       context.log.warn('Could not read sync markers', err.message);
     }
 
+    const subscriptions = Object.entries(subscriptionTotals)
+      .map(([name, v]) => ({ name, cost: Math.round(v.cost * 100) / 100, records: v.records }))
+      .sort((a, b) => b.cost - a.cost);
+
     context.log(`Query returned ${docs.length} documents, total cost: $${totalCost}`);
     context.res = {
       status: 200,
@@ -356,6 +368,8 @@ module.exports = async function (context, req) {
         serviceBreakdown,
         totalCost,
         lastSync,
+        subscriptions,
+        subscription: filterSubscription,
         trendWindow: { recentDays: recentDates.length, priorDays: priorDates.length }
       }
     };

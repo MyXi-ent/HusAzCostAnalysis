@@ -13,7 +13,7 @@
     <header>
         <div class="header-left">
             <h1>Azure Cost Analysis</h1>
-            <span class="subscription-badge">Xi_Sponsored_Subscription</span>
+            <span class="subscription-badge" id="subscriptionBadge">All Subscriptions</span>
         </div>
         <div class="header-right">
             <div class="sync-group">
@@ -70,6 +70,10 @@
     </div>
 
     <div class="controls">
+        <div class="subscription-filter" id="subscriptionFilter">
+            <span class="control-label">Subscription</span>
+            <div class="sub-btn-group" id="subscriptionButtons"></div>
+        </div>
         <div class="date-presets">
             <span class="control-label">Date Range</span>
             <button class="preset-btn" data-all="true">All</button>

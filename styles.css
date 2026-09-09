@@ -100,6 +100,29 @@ h1 {
 .preset-btn:hover { background: #2a3a5c; }
 .preset-btn.active { background: #0078d4; border-color: #0078d4; color: #fff; }
 
+.subscription-filter { display: flex; align-items: center; }
+.sub-btn-group { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.sub-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 5px 12px;
+    border: 1px solid #3a4a6c;
+    background: transparent;
+    color: #90caf9;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    transition: all 0.2s;
+}
+
+.sub-btn:hover { background: #2a3a5c; }
+.sub-btn.active { background: #0078d4; border-color: #0078d4; color: #fff; }
+.sub-btn-cost { font-size: 0.7rem; opacity: 0.75; }
+
 .granularity-separator { color: #3a4a6c; margin: 0 12px; border-left: 1px solid #3a4a6c; height: 24px; align-self: center; }
 .control-label {
     font-size: 0.7rem;
