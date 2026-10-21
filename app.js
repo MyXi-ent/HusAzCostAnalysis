@@ -192,7 +192,7 @@ function getResourceName(serviceName, serviceResource) {
 
 function getResourcePortalUrl(resourceId) {
     if (!resourceId) return null;
-    return `https://portal.azure.com/#@71a46d06-d6c8-4e81-8fe9-d2d6355392df/resource${resourceId}`;
+    return `https://portal.azure.com/#@37c98e37-5c60-4bb8-a161-a946ea9279a2/resource${resourceId}`;
 }
 
 function buildResourceBadge(mapped) {
@@ -553,7 +553,7 @@ function renderResourceGroups(serviceBreakdown) {
                 </span>
                 <span class="resource-cost">${formatCost(svc.cost)}</span>
             </div>`).join('');
-        const portalUrl = `https://portal.azure.com/#@71a46d06-d6c8-4e81-8fe9-d2d6355392df/resource/subscriptions/75920ee3-5dda-44fd-89ea-619c3265442e/resourceGroups/${encodeURIComponent(rg.name)}/overview`;
+        const portalUrl = `https://portal.azure.com/#@37c98e37-5c60-4bb8-a161-a946ea9279a2/resource/subscriptions/79177aea-6f1e-40aa-b5ab-e78b363d93ed/resourceGroups/${encodeURIComponent(rg.name)}/overview`;
         const rgTrend = aggregateTrend(rg.services);
         return `
         <div class="service-card rg-card">

@@ -1,7 +1,7 @@
 const https = require('https');
 const crypto = require('crypto');
 
-const host = 'husazcomoserverless.documents.azure.com';
+const host = 'husazcomoserverless-xi.documents.azure.com';
 const key = process.env.COSMOS_KEY;
 const dbId = 'HusAzConsumption';
 const collId = 'HusAzConsumptionCosmoDB';
@@ -123,7 +123,7 @@ module.exports = async function (context, req) {
       id: generateDocId(raw),
       Date: raw.Date || raw.date,
       SubscriptionName: raw.SubscriptionName || raw.subscriptionName || 'Xi_Sponsored_Subscription',
-      SubscriptionGuid: raw.SubscriptionGuid || raw.subscriptionGuid || '75920ee3-5dda-44fd-89ea-619c3265442e',
+      SubscriptionGuid: raw.SubscriptionGuid || raw.subscriptionGuid || '79177aea-6f1e-40aa-b5ab-e78b363d93ed',
       ResourceGuid: raw.ResourceGuid || raw.resourceGuid || '',
       ServiceName: raw.ServiceName || raw.serviceName || '',
       ServiceType: raw.ServiceType || raw.serviceType || '',

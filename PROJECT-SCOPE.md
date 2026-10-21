@@ -12,15 +12,15 @@ Internal dashboard displaying real Azure subscription cost data, read from Cosmo
 ## Azure Resources
 | Resource | Name | SKU | Resource Group |
 |----------|------|-----|----------------|
-| Static Web App | HusAzCostAnalysis | Free | HusAzRGMoHajjCareAI |
-| Cosmos DB (Serverless) | husazcomoserverless | Serverless | HusAzRGMoHajjCareAI |
+| Static Web App | HusAzCostAnalysis | Free | rg-hajj-prd-eus-001 |
+| Cosmos DB (Serverless) | husazcomoserverless-xi | Serverless | rg-hajj-prd-eus-001 |
 | Location | East US 2 / West US 2 | — | — |
 
 ## Data Source
 | Property | Value |
 |----------|-------|
-| Account | `husazcomoserverless` |
-| Endpoint | `https://husazcomoserverless.documents.azure.com:443/` |
+| Account | `husazcomoserverless-xi` |
+| Endpoint | `https://husazcomoserverless-xi.documents.azure.com:443/` |
 | Database | `HusAzConsumption` |
 | Container | `HusAzConsumptionCosmoDB` |
 | Partition Key | `/Date` (not confirmed yet) |
@@ -33,7 +33,7 @@ Internal dashboard displaying real Azure subscription cost data, read from Cosmo
 {
   "Date": "2026-06-06T00:00:00",
   "SubscriptionName": "Xi_Sponsored_Subscription",
-  "SubscriptionGuid": "75920ee3-5dda-44fd-89ea-619c3265442e",
+  "SubscriptionGuid": "79177aea-6f1e-40aa-b5ab-e78b363d93ed",
   "ResourceGuid": "a96e144b-d24b-51ec-908c-fdde4bc98343",
   "ServiceName": "Virtual Machines",
   "ServiceType": "Dadsv5 Series Windows",

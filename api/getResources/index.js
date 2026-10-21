@@ -42,6 +42,7 @@ function httpGet(hostname, path, token) {
 }
 
 async function getToken() {
+  if (process.env.ARM_ACCESS_TOKEN) return process.env.ARM_ACCESS_TOKEN;
   const body = `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&scope=https%3A%2F%2Fmanagement.azure.com%2F.default`;
   const result = await httpPost(
     'login.microsoftonline.com',

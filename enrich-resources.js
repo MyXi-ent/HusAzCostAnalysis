@@ -1,10 +1,10 @@
 // Enrich Cosmos DB documents with ResourceName based on ResourceGuid mapping
-// Run with: $env:COSMOS_KEY = az cosmosdb keys list --name husazcomoserverless --resource-group HusAzRGMoHajjCareAI --query primaryMasterKey -o tsv; node enrich-resources.js
+// Run with: $env:COSMOS_KEY = az cosmosdb keys list --name husazcomoserverless-xi --resource-group rg-hajj-prd-eus-001 --query primaryMasterKey -o tsv; node enrich-resources.js
 
 const https = require('https');
 const crypto = require('crypto');
 
-const host = 'husazcomoserverless.documents.azure.com';
+const host = 'husazcomoserverless-xi.documents.azure.com';
 const key = process.env.COSMOS_KEY;
 const dbId = 'HusAzConsumption';
 const collId = 'HusAzConsumptionCosmoDB';
@@ -15,27 +15,27 @@ const collId = 'HusAzConsumptionCosmoDB';
 // Multiple App Service Plans can share the same meter if they use the same SKU.
 const RESOURCE_MAP = {
   // === Azure App Service ===
-  '9003fa3d-5892-5a94-b9de-b6b5c151b84e': 'EP2+P2v3: HusAzFuncMoHajjDash6886WABAP1 + voice-myxi',
+  '9003fa3d-5892-5a94-b9de-b6b5c151b84e': 'EP2+P2v3: func-node-hajj-prd-eus-001 + voice-myxi',
   '6b4d6c1f-9d3d-5be4-8f90-9081da8b3551': 'P1v3: HusAzLbaikWebSite',
   'cc850c00-f902-5960-a359-f3cd3abfccf5': 'P1v3: (decommissioned)',
   '3503f67c-c189-5894-a06b-3ab051dc64f8': 'SWA Standard (9 sites)',
-  'a1ce959d-dde2-4bb4-8a58-edfdeb780d93': 'B1: HusAzPlanAzFuncP1 → HusAzShortenURL',
+  'a1ce959d-dde2-4bb4-8a58-edfdeb780d93': 'B1: asp-shortenurl-prd-eus-001 → HusAzShortenURL',
   'c0f5cb45-6fb1-41c9-8545-72ad400d9da4': 'F1: ASP-HusWABAGPT-8b0c (free)',
   'a90aec9f-eecb-42c7-8421-9b96716996dc': 'F1: (secondary free plan)',
 
   // === Azure Cosmos DB ===
-  '65d4ded2-41ae-43a8-bb68-3c200e1ba864': 'husazcomoserverless (100 RU/s provisioned)',
-  '727a51cb-7521-54cf-b3e2-a7cca08da5c6': 'Serverless RUs (husazcomoserverless)',
+  '65d4ded2-41ae-43a8-bb68-3c200e1ba864': 'husazcomoserverless-xi (100 RU/s provisioned)',
+  '727a51cb-7521-54cf-b3e2-a7cca08da5c6': 'Serverless RUs (husazcomoserverless-xi)',
   'adcb29f0-8680-51f6-b779-dd63b73ab68c': 'Serverless RUs (hajjaiportal live+staging)',
   '56f07b6a-c7d9-490f-a196-a7ee08e28712': 'Data Stored (all Cosmos accounts)',
   'dffc0580-fe39-515f-86af-7a5cf75b74d8': 'Geo-Replication Out',
   'adae3632-6f0c-5bc0-b864-b6a7b437438c': 'Geo-Replication In',
 
   // === Functions ===
-  'df5a0f19-e5ba-4d46-95cd-0fb29c69e7cd': 'Premium vCPU: HusAzFuncMoHajjDash6886WABAP1',
-  '08bfd03b-1cc7-43b7-bb94-66082518eeaf': 'Premium Memory: HusAzFuncMoHajjDash6886WABAP1',
-  '64944692-160a-5ca0-9f88-c61776ca0142': 'Always Ready: HusAzFuncMoHajjDash6886WABAP1',
-  '027afd58-24db-521f-8309-dcb3da519422': 'Always Ready Exec: HusAzFuncMoHajjDash6886WABAP1',
+  'df5a0f19-e5ba-4d46-95cd-0fb29c69e7cd': 'Premium vCPU: func-node-hajj-prd-eus-001',
+  '08bfd03b-1cc7-43b7-bb94-66082518eeaf': 'Premium Memory: func-node-hajj-prd-eus-001',
+  '64944692-160a-5ca0-9f88-c61776ca0142': 'Always Ready: func-node-hajj-prd-eus-001',
+  '027afd58-24db-521f-8309-dcb3da519422': 'Always Ready Exec: func-node-hajj-prd-eus-001',
   'cd5d6bae-9b8d-5456-ab84-46919175c318': 'On Demand Exec (Consumption functions)',
   '4d397fba-0393-57dd-9da3-f145b5c874fe': 'On Demand Executions (Consumption)',
   '2a384075-01d7-4f66-a84a-0eed3ca58876': 'Standard Exec Time (Consumption)',
@@ -49,19 +49,19 @@ const RESOURCE_MAP = {
   '3b2bbe89-0295-459e-b5e9-7e43b90318da': 'Consumption Data Retention',
 
   // === Storage ===
-  'd2cf0979-a625-4486-850c-72803f3f953c': 'P10 Disk (husazrgmohajjcareaib8b9)',
+  'd2cf0979-a625-4486-850c-72803f3f953c': 'P10 Disk (rg-hajj-prd-eus-001b8b9)',
   '93a6a529-4f49-47cb-9b1e-db9e5f23263f': 'P10 Disk (secondary)',
   'ac8f32dc-f93c-404f-b0cb-b5d707762170': 'S10 Disk',
   '82cd70ab-1aee-4b30-bc04-8b71e1204dbc': 'S4 Disk Ops',
 
   // === Service Bus ===
-  '9d0c5c5c-f0ff-48c2-8c68-9ee7ffd306af': 'Standard: husazservicebusmohajwaba',
-  '2a9992f8-e914-490b-a7a6-6d21ba55acda': 'Standard Ops: husazservicebusmohajwaba',
+  '9d0c5c5c-f0ff-48c2-8c68-9ee7ffd306af': 'Standard: husazservicebusmohajwaba-xi',
+  '2a9992f8-e914-490b-a7a6-6d21ba55acda': 'Standard Ops: husazservicebusmohajwaba-xi',
   '3c5657c6-28c7-49f0-9456-9a165161954d': 'Basic Ops: HusAzServiceBusMoHajjWABAstt',
 
   // === Web PubSub ===
-  'a88ceb1c-e801-537a-a763-1b09134b3b7c': 'Standard: HusAzWebPubSubMoHajjProduction',
-  'bf15064a-be7d-5e7c-9e7e-9d70bb9f2fcd': 'Standard Free: HusAzWebPubSubMoHajjWABADash',
+  'a88ceb1c-e801-537a-a763-1b09134b3b7c': 'Standard: huswebpubsubmohajjProduction-xi',
+  'bf15064a-be7d-5e7c-9e7e-9d70bb9f2fcd': 'Standard Free: huswebpubsubmohajjWABADash-xi',
   'fee389c9-b466-5ad0-bedb-bf148c21b9cd': 'Premium Unit',
 
   // === Virtual Machines ===
