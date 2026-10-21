@@ -1,5 +1,5 @@
 const { CosmosClient } = require('@azure/cosmos');
-const client = new CosmosClient({ endpoint: 'https://husazcomoserverless.documents.azure.com:443/', key: process.env.COSMOS_KEY });
+const client = new CosmosClient({ endpoint: 'https://husazcomoserverless-xi.documents.azure.com:443/', key: process.env.COSMOS_KEY });
 const c = client.database('HusAzConsumption').container('HusAzConsumptionCosmoDB');
 
 async function main() {

@@ -1,3 +1,5 @@
+> Historical record. It describes the previous multi-tenant Azure CLI setup (old estate) and does not describe the current runtime (Xi tenant 37c98e37-5c60-4bb8-a161-a946ea9279a2).
+
 ---
 name: azure-multi-tenant-cli
 description: 'Use when running Azure CLI commands that span more than one Entra ID tenant — e.g. querying cost, resources, or role assignments across Haytham (71a46d06) and Xi (37c98e37) tenants without switching context. Covers staying signed into all tenants simultaneously, avoiding the hanging `az login --tenant` browser prompt, cross-tenant Cost Management queries, and why single-tenant service principals cannot authenticate across tenants.'

@@ -17,6 +17,10 @@ on:
         description: 'Backfill end date (YYYY-MM-DD). Required if backfill_start is set.'
         required: false
 
+permissions:
+  contents: read
+  id-token: write
+
 concurrency:
   group: cost-sync
   cancel-in-progress: false
@@ -34,23 +38,30 @@ jobs:
       max-parallel: 1
       matrix:
         subscription:
-          - Xi_Sponsored_Subscription
-          - Xi_Sponsored_2
-          - Xi_Sponsored_3
+          - Xi_Sponsored_Subscription_NEW
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
 
+      - uses: Azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get ARM access token
+        run: |
+          TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "ARM_ACCESS_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Sync ${{ matrix.subscription }}
         env:
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_SUBSCRIPTIONS: ${{ secrets.ARM_SUBSCRIPTIONS }}
+          ARM_SUBSCRIPTIONS: '[{"name":"Xi_Sponsored_Subscription_NEW","id":"${{ vars.AZURE_SUBSCRIPTION_ID }}"}]'
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
           SUBSCRIPTION: ${{ matrix.subscription }}
           BACKFILL_START: ${{ inputs.backfill_start }}

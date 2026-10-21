@@ -1,7 +1,7 @@
 const https = require('https');
 const crypto = require('crypto');
 
-const host = 'husazcomoserverless.documents.azure.com';
+const host = 'husazcomoserverless-xi.documents.azure.com';
 const key = process.env.COSMOS_KEY;
 const dbId = 'HusAzConsumption';
 const collId = 'HusAzConsumptionCosmoDB';

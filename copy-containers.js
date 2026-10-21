@@ -3,8 +3,8 @@
 const https = require('https');
 const crypto = require('crypto');
 
-const SRC = { host: 'husazcosmodb.documents.azure.com', key: process.env.SRC_KEY };
-const DST = { host: 'husazcomoserverless.documents.azure.com', key: process.env.DST_KEY };
+const SRC = { host: 'cosmos-xiweb-prd-eus2-001.documents.azure.com', key: process.env.SRC_KEY };
+const DST = { host: 'husazcomoserverless-xi.documents.azure.com', key: process.env.DST_KEY };
 const JOBS = [
   { db: 'HusAzMoHajj6886WABADashDemoDB', container: 'EndpointConfig', pk: '/type' }
 ];

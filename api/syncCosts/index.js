@@ -71,10 +71,10 @@ function resolveSubscriptions() {
 
 // Documents for this subscription keep the original id formula, so the existing
 // Cosmos records are updated in place instead of being duplicated alongside new ones.
-const LEGACY_ID_SUBSCRIPTION = "75920ee3-5dda-44fd-89ea-619c3265442e";
+const LEGACY_ID_SUBSCRIPTION = "79177aea-6f1e-40aa-b5ab-e78b363d93ed";
 
 // ─── Cosmos DB ────────────────────────────────────────────────────────────────
-const cosmosHost = "husazcomoserverless.documents.azure.com";
+const cosmosHost = "husazcomoserverless-xi.documents.azure.com";
 const cosmosKey = process.env.COSMOS_KEY;
 const dbId = "HusAzConsumption";
 const collId = "HusAzConsumptionCosmoDB";
@@ -114,6 +114,7 @@ function httpGet(hostname, path, headers) {
 }
 
 async function getArmToken(cred) {
+  if (!cred && process.env.ARM_ACCESS_TOKEN) return process.env.ARM_ACCESS_TOKEN;
   const { tenantId, clientId, clientSecret } = resolveCredentials(cred);
   if (!tenantId || !clientId || !clientSecret) {
     throw new Error(`Missing credentials for cred=${cred || "default"}`);
